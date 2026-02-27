@@ -1,0 +1,15 @@
+# Flutter Security Scanner Dependencies
+# ======================================
+
+# Core dependencies (none - uses Python standard library)
+
+# Optional dependencies for development
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# For future extensions
+# pyyaml>=6.0  # For YAML config support
+# jinja2>=3.0  # For template-based reports
