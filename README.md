@@ -33,7 +33,8 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 
 ## 🚀 Installation
 
-```bash
+```
+bash
 # Clone the repository
 git clone https://github.com/calebelebhose/flutter-security-scanner.git
 cd flutter-security-scanner
@@ -49,13 +50,15 @@ pip install -e .
 
 ### Basic Scan
 
-```bash
+```
+bash
 python src/main.py /path/to/flutter/project
 ```
 
 ### Output Formats
 
-```bash
+```
+bash
 # Console output (default)
 python src/main.py ./my_flutter_app
 
@@ -68,21 +71,24 @@ python src/main.py ./my_flutter_app -f html -o report.html
 
 ### Filter by Severity
 
-```bash
+```
+bash
 # Only show high and critical findings
 python src/main.py ./my_flutter_app -s high
 ```
 
 ### Filter by MASVS Category
 
-```bash
+```
+bash
 # Only scan for STORAGE and CRYPTO issues
 python src/main.py ./my_flutter_app --masvs-category STORAGE CRYPTO
 ```
 
 ### Verbose Mode
 
-```bash
+```
+bash
 python src/main.py ./my_flutter_app -v
 ```
 
@@ -96,7 +102,8 @@ python src/main.py ./my_flutter_app -v
 
 ### GitHub Actions Example
 
-```yaml
+```
+yaml
 - name: Security Scan
   run: |
     pip install flutter-security-scanner
@@ -105,7 +112,8 @@ python src/main.py ./my_flutter_app -v
 
 ### Docker
 
-```bash
+```
+bash
 docker run -v $(pwd):/app flutter-security-scanner /app
 ```
 
@@ -146,7 +154,8 @@ flutter-security-scanner/
 
 ## 🧪 Testing
 
-```bash
+```
+bash
 # Run all tests
 pytest
 
