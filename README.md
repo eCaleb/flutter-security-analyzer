@@ -171,7 +171,7 @@ MIT License - See LICENSE file for details.
 
 - OWASP Mobile Application Security Project
 - University of Chester Cybersecurity Department
-- Dr. Bismark Asare (Supervisor)
+
 
 ## 📚 References
 
