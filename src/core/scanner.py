@@ -206,7 +206,7 @@ class SecurityScanner:
         dart_files = []
         
         # Directories to skip
-        skip_dirs = {'.dart_tool', 'build', '.git', '.idea', 'ios', 'android', 'web', 'linux', 'macos', 'windows'}
+        skip_dirs = {'.dart_tool', 'build', '.git', '.idea', 'ios', 'android', 'web', 'linux', 'macos', 'windows', 'test', 'tests', 'test_driver', 'integration_test'}
         
         for root, dirs, files in os.walk(path):
             # Remove directories to skip
