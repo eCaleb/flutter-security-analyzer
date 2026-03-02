@@ -54,17 +54,23 @@ class BasePattern(ABC):
             lines: File content split into lines
             
         Returns:
-            List of match dictionaries
+            List of match dictionaries (deduplicated by line number)
         """
         matches = []
+        seen_lines = set()  # Track which lines we've already matched
         
         for pattern in self._compiled_patterns:
             for match in pattern.finditer(content):
                 line_number = content[:match.start()].count('\n') + 1
-                code_snippet = self._get_code_snippet(lines, line_number)
+                
+                # Skip if we already have a finding on this line for this vulnerability
+                if line_number in seen_lines:
+                    continue
                 
                 if self._is_false_positive(match, content, lines, line_number):
                     continue
+                
+                code_snippet = self._get_code_snippet(lines, line_number)
                 
                 matches.append({
                     'line_number': line_number,
@@ -72,6 +78,8 @@ class BasePattern(ABC):
                     'matched_text': match.group(),
                     'confidence': self._calculate_confidence(match, content, lines)
                 })
+                
+                seen_lines.add(line_number)  # Mark this line as matched
         
         return matches
     
