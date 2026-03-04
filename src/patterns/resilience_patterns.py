@@ -18,19 +18,10 @@ RESILIENCE_PATTERNS = [
         'cwe_id': 'CWE-919',
         'remediation': 'Implement root/jailbreak detection using flutter_jailbreak_detection, root_checker, or safe_device packages. Take appropriate action (warn user, limit functionality, or exit) when detected.',
         'patterns': [
-            # Patterns indicating sensitive functionality without root detection
-            r'flutter_secure_storage(?!.*jailbreak)',
-            r'encrypt\s*\([^)]*\)(?!.*root)',
-            r'BiometricStorage(?!.*isRooted)',
+            # V022 is now handled separately by scanning pubspec.yaml
+            # These patterns are intentionally left empty
         ],
-        'false_positive_patterns': [
-            r'flutter_jailbreak_detection',
-            r'root_checker',
-            r'safe_device',
-            r'isJailBroken',
-            r'isRooted',
-            r'jailbreakDetection',
-        ]
+        'false_positive_patterns': []
     },
     {
         'vulnerability_id': 'V023',

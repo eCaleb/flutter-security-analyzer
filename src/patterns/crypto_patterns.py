@@ -63,10 +63,11 @@ CRYPTO_PATTERNS = [
         'cwe_id': 'CWE-338',
         'remediation': 'Use Random.secure() for cryptographically secure random numbers in Dart. Never use math.Random() for security-sensitive operations.',
         'patterns': [
-            r'Random\s*\(\s*\)(?!.*secure)',
-            r'new\s+Random\s*\(',
+            # Seeded Random is ALWAYS predictable and insecure
             r'Random\s*\(\s*\d+\s*\)',
-            r'math\.Random\s*\(',
+            # Random used in token/key/password generation context
+            r'(?:token|key|password|pin|secret|nonce|salt|otp|session[_]?id)\s*[+=].*Random',
+            r'generate(?:Token|Key|Password|Pin|Secret|Nonce|Salt|Otp|Session).*Random\s*\(',
         ],
         'false_positive_patterns': [
             r'Random\s*\.\s*secure',

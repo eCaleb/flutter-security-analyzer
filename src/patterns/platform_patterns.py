@@ -84,8 +84,8 @@ PLATFORM_PATTERNS = [
         'remediation': 'Use flutter_windowmanager or platform channels to set FLAG_SECURE on Android. Use appropriate UIScreen settings on iOS. Implement screen capture detection.',
         'patterns': [
             r'TextField\s*\([^)]*obscureText\s*:\s*true',
-            r'TextFormField\s*\([^)]*obscureText',
-            r'(?:password|pin|cvv|ssn)(?:Field|Input|Controller)',
+            r'TextFormField\s*\([^)]*obscureText\s*:\s*true',
+            r'CupertinoTextField\s*\([^)]*obscureText\s*:\s*true',
         ],
         'false_positive_patterns': [
             r'flutter_windowmanager',

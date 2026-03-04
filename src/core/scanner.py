@@ -167,12 +167,22 @@ class SecurityScanner:
         # Discover Dart files
         dart_files = self._discover_dart_files(path)
         
+        # Collect all Dart content for project-level analysis
+        all_dart_content = []
+        
         # Scan each file
         for dart_file in dart_files:
-            file_findings, line_count = self._scan_file(dart_file)
+            file_findings, line_count, file_content = self._scan_file(dart_file)
             results.findings.extend(file_findings)
             results.total_files_scanned += 1
             results.total_lines_scanned += line_count
+            all_dart_content.append(file_content)
+        
+        # Check pubspec.yaml for project-level security packages
+        # Pass combined Dart content to check for sensitive functionality
+        combined_dart_content = '\n'.join(all_dart_content)
+        pubspec_findings = self._check_pubspec_security(path, combined_dart_content)
+        results.findings.extend(pubspec_findings)
         
         # Apply severity filter
         if self.config.min_severity:
@@ -218,7 +228,7 @@ class SecurityScanner:
         
         return dart_files
     
-    def _scan_file(self, file_path: Path) -> tuple[List[Finding], int]:
+    def _scan_file(self, file_path: Path) -> tuple[List[Finding], int, str]:
         """
         Scan a single Dart file for vulnerabilities.
         
@@ -226,7 +236,7 @@ class SecurityScanner:
             file_path: Path to Dart file
             
         Returns:
-            Tuple of (list of findings, line count)
+            Tuple of (list of findings, line count, file content)
         """
         findings = []
         
@@ -238,7 +248,7 @@ class SecurityScanner:
         except (IOError, UnicodeDecodeError) as e:
             if self.config.verbose:
                 print(f"Warning: Could not read {file_path}: {e}")
-            return [], 0
+            return [], 0, ''
         
         # Apply each pattern
         for pattern in self.pattern_registry.get_all_patterns():
@@ -261,7 +271,7 @@ class SecurityScanner:
                 )
                 findings.append(finding)
         
-        return findings, line_count
+        return findings, line_count, content
     
     def _filter_by_severity(self, findings: List[Finding]) -> List[Finding]:
         """Filter findings by minimum severity level."""
@@ -273,3 +283,118 @@ class SecurityScanner:
     def _filter_by_category(self, findings: List[Finding]) -> List[Finding]:
         """Filter findings by MASVS categories."""
         return [f for f in findings if f.masvs_category in self.config.masvs_categories]
+    
+    def _check_pubspec_security(self, path: Path, dart_files_content: str) -> List[Finding]:
+        """
+        Check pubspec.yaml for security-related packages.
+        
+        This checks for project-level security configurations like
+        root/jailbreak detection packages, but ONLY if the app
+        contains sensitive functionality.
+        
+        Args:
+            path: Path to Flutter project directory
+            dart_files_content: Combined content of all scanned Dart files
+            
+        Returns:
+            List of findings for missing security packages
+        """
+        findings = []
+        
+        # Find pubspec.yaml
+        if path.is_file():
+            pubspec_path = path.parent / 'pubspec.yaml'
+        else:
+            pubspec_path = path / 'pubspec.yaml'
+        
+        # If no pubspec.yaml found, skip this check
+        if not pubspec_path.exists():
+            return findings
+        
+        try:
+            with open(pubspec_path, 'r', encoding='utf-8') as f:
+                pubspec_content = f.read().lower()
+        except (IOError, UnicodeDecodeError):
+            return findings
+        
+        # =====================================================
+        # V022: Check for root/jailbreak detection packages
+        # Only flag if app contains sensitive functionality
+        # =====================================================
+        
+        # Step 1: Check if app has sensitive functionality
+        sensitive_indicators = [
+            # Crypto/Wallet related
+            r'encrypt\s*\(',
+            r'decrypt\s*\(',
+            r'wallet',
+            r'seed',
+            r'private[_]?key',
+            r'mnemonic',
+            r'crypto',
+            # Payment related
+            r'payment',
+            r'credit[_]?card',
+            r'stripe',
+            r'paypal',
+            r'checkout',
+            r'purchase',
+            # Banking related
+            r'bank',
+            r'transfer',
+            r'account[_]?balance',
+            r'transaction',
+            # Authentication related
+            r'biometric',
+            r'local[_]?auth',
+            r'flutter_secure_storage',
+            r'pin[_]?code',
+            # Health related
+            r'health[_]?data',
+            r'medical',
+            r'patient',
+        ]
+        
+        import re
+        dart_content_lower = dart_files_content.lower()
+        
+        # Check if ANY sensitive indicator is found
+        has_sensitive_code = any(
+            re.search(indicator, dart_content_lower) 
+            for indicator in sensitive_indicators
+        )
+        
+        # If no sensitive code, don't flag V022
+        if not has_sensitive_code:
+            return findings
+        
+        # Step 2: Check for root detection packages in pubspec.yaml
+        root_detection_packages = [
+            'flutter_jailbreak_detection',
+            'root_checker',
+            'safe_device',
+            'freerasp',
+            'jailbreak_detection',
+            'trust_fall',
+        ]
+        
+        has_root_detection = any(pkg in pubspec_content for pkg in root_detection_packages)
+        
+        # Step 3: If sensitive code exists but no root detection, flag it
+        if not has_root_detection:
+            findings.append(Finding(
+                vulnerability_id='V022',
+                title='Missing Root/Jailbreak Detection',
+                description='App contains sensitive functionality (crypto, payments, secure storage, or biometrics) but does not include root/jailbreak detection. Rooted devices can bypass app security controls and access protected data.',
+                severity='medium',
+                file_path=str(pubspec_path),
+                line_number=1,
+                code_snippet='# Sensitive code detected but no root/jailbreak detection package found in dependencies',
+                masvs_category='RESILIENCE',
+                masvs_control='MASVS-RESILIENCE-1',
+                remediation='Add a root/jailbreak detection package to pubspec.yaml. Recommended packages: flutter_jailbreak_detection, freerasp, or safe_device.',
+                cwe_id='CWE-919',
+                confidence='high'
+            ))
+        
+        return findings
