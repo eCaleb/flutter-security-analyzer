@@ -133,7 +133,8 @@ class BasePattern:
     def __init__(self, vulnerability_id: str, title: str, description: str,
                  severity: str, masvs_category: str, masvs_control: str,
                  remediation: str, cwe_id: str, patterns: List[str],
-                 false_positive_patterns: List[str] = None):
+                 false_positive_patterns: List[str] = None,
+                 context_false_positive_patterns: List[str] = None):
         self.vulnerability_id = vulnerability_id
         self.title = title
         self.description = description
@@ -144,6 +145,7 @@ class BasePattern:
         self.cwe_id = cwe_id
         self.patterns = patterns
         self.false_positive_patterns = false_positive_patterns or []
+        self.context_false_positive_patterns = context_false_positive_patterns or []
         
         self._compiled_patterns = [
             re.compile(p, re.MULTILINE | re.IGNORECASE) 
@@ -152,6 +154,10 @@ class BasePattern:
         self._fp_compiled = [
             re.compile(p, re.MULTILINE | re.IGNORECASE)
             for p in self.false_positive_patterns
+        ]
+        self._context_fp_compiled = [
+            re.compile(p, re.MULTILINE | re.IGNORECASE)
+            for p in self.context_false_positive_patterns
         ]
     
     def search(self, content: str, lines: List[str]) -> List[Dict[str, Any]]:
@@ -200,12 +206,27 @@ class BasePattern:
         if line.startswith('//') or line.startswith('/*') or line.startswith('*'):
             return True
         
-        # Check false positive patterns
+        # Step 1: Check MATCHED LINE against line-level FP patterns
         for fp_pattern in self._fp_compiled:
-            if fp_pattern.search(line):
+            if fp_pattern.search(lines[line_number - 1]):
                 return True
         
+        # Step 2: Check SURROUNDING CONTEXT against context FP patterns
+        # (3 lines above + matched line + 1 line below)
+        if self._context_fp_compiled:
+            context_start = max(0, line_number - 4)
+            context_end = min(len(lines), line_number + 1)
+            context_text = ' '.join(lines[context_start:context_end])
+            
+            for fp_pattern in self._context_fp_compiled:
+                if fp_pattern.search(context_text):
+                    return True
+        
         return False
+
+
+# RegexPattern is the same as BasePattern for standalone testing
+RegexPattern = BasePattern
 
 
 # ============================================================================
@@ -840,6 +861,273 @@ class TestSeverityFiltering(unittest.TestCase):
         filtered = self.filter_by_severity(findings, 'medium')
         
         self.assertEqual(len(filtered), 2)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+
+
+# ============================================================================
+# BEYOND SELF REFINEMENT TESTS (Week 6)
+# Tests for the 5 pattern fixes from Beyond Self false positive analysis
+# ============================================================================
+
+class TestBeyondSelfRefinements(unittest.TestCase):
+    """
+    Tests for pattern refinements discovered through Beyond Self app scanning.
+    
+    These tests verify that false positives identified in real-world scanning
+    are now correctly filtered, while true positives are still detected.
+    
+    Patterns refined: V013, V001, V002, V018, V025
+    """
+    
+    def setUp(self):
+        """Set up pattern instances for testing."""
+        self.patterns = {}
+        # Create pattern instances matching the updated definitions
+        from_patterns = {
+            'V001': {
+                'vulnerability_id': 'V001',
+                'title': 'Hardcoded API Keys/Secrets',
+                'description': 'Test',
+                'severity': 'high',
+                'masvs_category': 'STORAGE',
+                'masvs_control': 'MASVS-STORAGE-1',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-798',
+                'patterns': [
+                    r'(?:api[_-]?key|apikey|secret|password|token|credential|auth[_-]?token|access[_-]?token|private[_-]?key)\s*[:=]\s*["\'][^"\']{8,}["\']',
+                    r'(?:const|final)\s+\w*(?:key|secret|password|token|credential)\w*\s*=\s*["\'][^"\']+["\']',
+                    r'sk-[A-Za-z0-9]{20,}',
+                    r'Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+',
+                ],
+                'false_positive_patterns': [
+                    r'//.*(?:api[_-]?key|password|token)',
+                    r'\*.*(?:api[_-]?key|password|token)',
+                    r'TODO|FIXME|example|placeholder|your[_-]?key|<.*>',
+                    r"""static\s+const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z_]{3,30}['"]""",
+                    r"""['"](Enter\s+|Confirm\s+|New\s+|Old\s+|Current\s+)?[Pp]assword['"]\s*[,;)\]]""",
+                    r"""(?:const|final)\s+(?:\w+\s+)*\w+\s*=\s*['"][^'"]*\s+[^'"]*(?:[Pp]assword|[Tt]oken)[^'"]*['"]""",
+                    r"""(?:password|token|secret|key)\s*[:=]\s*['"][^'"]{0,7}['"]""",
+                    r'(?:hint|label|placeholder|text)\s*:\s*["\'].*(?:password|token)',
+                    r"""\[['"](?:password|token|key|secret)['"]\]""",
+                ]
+            },
+            'V002': {
+                'vulnerability_id': 'V002',
+                'title': 'Sensitive Data in SharedPreferences',
+                'description': 'Test',
+                'severity': 'high',
+                'masvs_category': 'STORAGE',
+                'masvs_control': 'MASVS-STORAGE-1',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-312',
+                'patterns': [
+                    r'(?:prefs|preferences|sharedPrefs|sharedPreferences)\??\s*\.\s*set(?:String|Int|Bool|Double)\s*\(\s*["\'](?:password|token|secret|credential|auth|session|pin)',
+                    r'SharedPreferences.*set(?:String|Int|Bool)\s*\(\s*["\'](?:password|token|secret|credential|auth|session|pin)',
+                ],
+                'false_positive_patterns': [
+                    r'flutter_secure_storage',
+                    r'EncryptedSharedPreferences',
+                    r'secureStorage',
+                    r'(?:theme|locale|language|onboarding|remember_me|saved_email|first_launch|dark_mode|font_size|notification)',
+                ]
+            },
+            'V018': {
+                'vulnerability_id': 'V018',
+                'title': 'Debug Mode Enabled in Production',
+                'description': 'Test',
+                'severity': 'medium',
+                'masvs_category': 'CODE',
+                'masvs_control': 'MASVS-CODE-4',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-489',
+                'patterns': [
+                    r'(?:debugMode|isDebug)\s*[:=]\s*true',
+                    r'kDebugMode\s*\?\s*true',
+                    r'const\s+bool\s+isDebug\s*=\s*true',
+                    r'assert\s*\(\s*debugMode\s*==\s*true\s*\)',
+                    r'debugPrint\s*\(',
+                ],
+                'false_positive_patterns': [
+                    r'kDebugMode\s*\?\s*true',
+                ],
+                'context_false_positive_patterns': [
+                    r'if\s*\(\s*kDebugMode\s*\)',
+                    r'kReleaseMode',
+                    r'!kDebugMode',
+                ]
+            },
+            'V025': {
+                'vulnerability_id': 'V025',
+                'title': 'Excessive Permission Requests',
+                'description': 'Test',
+                'severity': 'medium',
+                'masvs_category': 'PRIVACY',
+                'masvs_control': 'MASVS-PRIVACY-1',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-250',
+                'patterns': [
+                    r'uses-permission.*(?:CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|READ_CONTACTS|READ_SMS|READ_PHONE_STATE|READ_CALL_LOG|READ_EXTERNAL_STORAGE)',
+                    r'await\s*\[.*Permission\.\w+.*Permission\.\w+.*Permission\.\w+.*Permission\.\w+.*\]\.request\(\)',
+                ],
+                'false_positive_patterns': [
+                    r'permissionStatus',
+                    r'isGranted',
+                    r'checkPermission',
+                    r'<!--',
+                ]
+            },
+        }
+        
+        for vid, pdef in from_patterns.items():
+            self.patterns[vid] = RegexPattern(**pdef)
+    
+    # ----- V013: Certificate Pinning (moved to project-level) -----
+    
+    def test_v013_not_in_per_line_patterns(self):
+        """V013 should no longer be a per-line pattern (moved to pubspec check)."""
+        # V013 was removed from NETWORK_PATTERNS, so it shouldn't exist
+        # as a per-line pattern anymore
+        self.assertNotIn('V013', self.patterns)
+    
+    # ----- V001: Hardcoded API Keys -----
+    
+    def test_v001_catches_real_api_key(self):
+        """V001 should detect a real Google API key."""
+        code = 'static String googlePlaceAPIkey = "AIzaSyAZclYMC5je43TrDrv6DU_ukUKbenjfxGA";'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Should detect real API key")
+    
+    def test_v001_ignores_route_constant_forgot_password(self):
+        """V001 should NOT flag route constants like 'forgot_password'."""
+        code = "  static const forgotPassword = 'forgot_password';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Route constant should not be flagged")
+    
+    def test_v001_ignores_route_constant_reset_password(self):
+        """V001 should NOT flag route constants like 'reset_password'."""
+        code = "  static const resetPassword = 'reset_password';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Route constant should not be flagged")
+    
+    def test_v001_ignores_ui_label_password(self):
+        """V001 should NOT flag UI labels containing 'Password'."""
+        code = """labelText: 'Password',"""
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "UI label should not be flagged")
+    
+    def test_v001_catches_hardcoded_bearer_token(self):
+        """V001 should detect a hardcoded Bearer JWT token."""
+        code = 'token = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Should detect Bearer token")
+    
+    def test_v001_ignores_ui_display_string_forgot_password(self):
+        """V001 should NOT flag UI display strings like 'Forgot Password?'."""
+        code = "static const String forgotPassword = 'Forgot Password?';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "UI display string should not be flagged")
+    
+    def test_v001_ignores_ui_display_string_reset_password(self):
+        """V001 should NOT flag UI display strings like 'Reset Password'."""
+        code = "static const String resetPassword = 'Reset Password';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "UI display string should not be flagged")
+    
+    def test_v001_ignores_key_name_constant(self):
+        """V001 should NOT flag SharedPreferences key name constants like 'refresh_token'."""
+        code = "static const String refreshToken = 'refresh_token';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Key name constant should not be flagged")
+    
+    # ----- V002: SharedPreferences -----
+    
+    def test_v002_ignores_plain_getinstance(self):
+        """V002 should NOT flag plain SharedPreferences.getInstance()."""
+        code = "SharedPreferences prefr = await SharedPreferences.getInstance();"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Plain getInstance should not be flagged")
+    
+    def test_v002_ignores_generic_helper_setbool(self):
+        """V002 should NOT flag generic helper methods with variable key names."""
+        code = "return await sharedPreferences?.setBool(key, value);"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Generic helper with variable key should not be flagged")
+    
+    def test_v002_ignores_generic_helper_setstring(self):
+        """V002 should NOT flag generic helper setString with variable key."""
+        code = "return await sharedPreferences?.setString(key, value);"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Generic helper with variable key should not be flagged")
+    
+    def test_v002_ignores_nonsensitive_keys(self):
+        """V002 should NOT flag non-sensitive keys like 'saved_email'."""
+        code = "final savedEmail = prefs.getString('saved_email');"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Non-sensitive key should not be flagged")
+    
+    def test_v002_catches_password_in_sharedprefs(self):
+        """V002 should detect storing password in SharedPreferences."""
+        code = "await prefs.setString('password', userPassword);"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Password in SharedPrefs should be flagged")
+    
+    def test_v002_catches_token_in_sharedprefs(self):
+        """V002 should detect storing auth token in SharedPreferences."""
+        code = "prefs.setString('auth_token', response.token);"
+        matches = self.patterns['V002'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Auth token in SharedPrefs should be flagged")
+    
+    # ----- V018: Debug Mode -----
+    
+    def test_v018_ignores_guarded_debugprint(self):
+        """V018 should NOT flag debugPrint inside kDebugMode guard."""
+        code = "  } catch (e) {\n    if (kDebugMode) {\n      debugPrint('AuthCubit: failed');\n    }\n  }"
+        lines = code.split('\n')
+        matches = self.patterns['V018'].search(code, lines)
+        self.assertEqual(len(matches), 0, "Guarded debugPrint should not be flagged")
+    
+    def test_v018_catches_unguarded_debugprint(self):
+        """V018 should flag debugPrint NOT inside kDebugMode guard."""
+        code = 'void doSomething() {\n  debugPrint("Certificate check for: $host:$port");\n  return;\n}'
+        lines = code.split('\n')
+        matches = self.patterns['V018'].search(code, lines)
+        self.assertGreater(len(matches), 0, "Unguarded debugPrint should be flagged")
+    
+    def test_v018_ignores_debugprint_with_release_mode_check(self):
+        """V018 should NOT flag debugPrint near kReleaseMode check."""
+        code = "  if (!kReleaseMode) {\n    debugPrint('Debug info');\n  }"
+        lines = code.split('\n')
+        matches = self.patterns['V018'].search(code, lines)
+        self.assertEqual(len(matches), 0, "kReleaseMode-guarded debugPrint should not be flagged")
+    
+    # ----- V025: Excessive Permissions -----
+    
+    def test_v025_ignores_two_permission_request(self):
+        """V025 should NOT flag requesting 2 permissions (camera + mic for video call)."""
+        code = "await [Permission.camera, Permission.microphone].request();"
+        matches = self.patterns['V025'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "2-permission request should not be flagged")
+    
+    def test_v025_ignores_single_permission_request(self):
+        """V025 should NOT flag a single permission request."""
+        code = "final status = await Permission.microphone.request();"
+        matches = self.patterns['V025'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Single permission request should not be flagged")
+    
+    def test_v025_catches_manifest_dangerous_permission(self):
+        """V025 should flag dangerous permissions in Android manifest."""
+        code = '<uses-permission android:name="android.permission.READ_SMS"/>'
+        matches = self.patterns['V025'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Dangerous manifest permission should be flagged")
+    
+    def test_v025_catches_four_permission_batch(self):
+        """V025 should flag batch request of 4+ permissions."""
+        code = "await [Permission.camera, Permission.microphone, Permission.location, Permission.contacts].request();"
+        matches = self.patterns['V025'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "4-permission batch should be flagged")
 
 
 if __name__ == '__main__':

@@ -25,6 +25,9 @@ CODE_PATTERNS = [
             r'debugPrint\s*\(',
         ],
         'false_positive_patterns': [
+            r'kDebugMode\s*\?\s*true',
+        ],
+        'context_false_positive_patterns': [
             r'if\s*\(\s*kDebugMode\s*\)',
             r'kReleaseMode',
             r'!kDebugMode',

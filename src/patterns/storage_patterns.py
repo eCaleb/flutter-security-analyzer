@@ -27,6 +27,20 @@ STORAGE_PATTERNS = [
             r'//.*(?:api[_-]?key|password|token)',
             r'\*.*(?:api[_-]?key|password|token)',
             r'TODO|FIXME|example|placeholder|your[_-]?key|<.*>',
+            # Route/endpoint/key name constants (e.g., 'forgot_password', 'refresh_token')
+            # These are lowercase_snake_case strings, not actual secrets
+            r"""static\s+const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z_]{3,30}['"]""",
+            # UI label strings (e.g., 'Password', 'Enter password')
+            r"""['"](Enter\s+|Confirm\s+|New\s+|Old\s+|Current\s+)?[Pp]assword['"]\s*[,;)\]]""",
+            # UI display strings with spaces (e.g., 'Forgot Password?', 'Reset Password')
+            # Real secrets don't contain spaces
+            r"""(?:const|final)\s+(?:\w+\s+)*\w+\s*=\s*['"][^'"]*\s+[^'"]*(?:[Pp]assword|[Tt]oken)[^'"]*['"]""",
+            # Short string values (less than 8 chars) that happen to contain keyword
+            r"""(?:password|token|secret|key)\s*[:=]\s*['"][^'"]{0,7}['"]""",
+            # Hint text and label patterns
+            r'(?:hint|label|placeholder|text)\s*:\s*["\'].*(?:password|token)',
+            # Map key lookups (e.g., data['password'])
+            r"""\[['"](?:password|token|key|secret)['"]\]""",
         ]
     },
     {
@@ -39,14 +53,18 @@ STORAGE_PATTERNS = [
         'cwe_id': 'CWE-312',
         'remediation': 'Use flutter_secure_storage for sensitive data, which encrypts data using platform-specific secure storage (Keychain on iOS, EncryptedSharedPreferences on Android).',
         'patterns': [
-            r'SharedPreferences.*set(?:String|Int|Bool).*\b(?:password|token|secret|key|credential|auth|session|pin)',
-            r'(?:prefs|preferences|sharedPrefs)\s*\.\s*set(?:String|Int|Bool|Double)\s*\(\s*["\'](?:password|token|secret|key|credential|auth|session)',
-            r'SharedPreferences\.getInstance',
+            # Only flag when a sensitive keyword appears as a QUOTED STRING key name
+            # e.g., prefs.setString('password', value) or prefs.setString("auth_token", value)
+            # Does NOT match: prefs.setBool(key, value) where 'key' is a variable
+            r'(?:prefs|preferences|sharedPrefs|sharedPreferences)\??\s*\.\s*set(?:String|Int|Bool|Double)\s*\(\s*["\'](?:password|token|secret|credential|auth|session|pin)',
+            r'SharedPreferences.*set(?:String|Int|Bool)\s*\(\s*["\'](?:password|token|secret|credential|auth|session|pin)',
         ],
         'false_positive_patterns': [
             r'flutter_secure_storage',
             r'EncryptedSharedPreferences',
             r'secureStorage',
+            # Non-sensitive SharedPreferences keys
+            r'(?:theme|locale|language|onboarding|remember_me|saved_email|first_launch|dark_mode|font_size|notification)',
         ]
     },
     {
@@ -64,8 +82,10 @@ STORAGE_PATTERNS = [
             r'log\s*\(\s*["\'].*(?:Auth|Token|Password)',
         ],
         'false_positive_patterns': [
-            r'kReleaseMode',
             r'kDebugMode\s*\?\s*print',
+        ],
+        'context_false_positive_patterns': [
+            r'kReleaseMode',
             r'if\s*\(\s*kDebugMode\s*\)',
         ]
     },

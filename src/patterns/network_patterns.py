@@ -54,26 +54,8 @@ NETWORK_PATTERNS = [
             r'if\s*\(\s*!kReleaseMode\s*\)',
         ]
     },
-    {
-        'vulnerability_id': 'V013',
-        'title': 'Missing Certificate Pinning',
-        'description': 'App does not implement certificate pinning, allowing attackers with CA-signed certificates to perform man-in-the-middle attacks.',
-        'severity': 'medium',
-        'masvs_category': 'NETWORK',
-        'masvs_control': 'MASVS-NETWORK-2',
-        'cwe_id': 'CWE-295',
-        'remediation': 'Implement certificate pinning using packages like http_certificate_pinning or dio_http2_adapter. Pin to leaf certificate or public key hash.',
-        'patterns': [
-            r'Dio\s*\(\s*\)(?!.*interceptors)',
-            r'http\.Client\s*\(\s*\)',
-            r'HttpClient\s*\(\s*\)(?!.*SecurityContext)',
-        ],
-        'false_positive_patterns': [
-            r'certificate.*pin',
-            r'SecurityContext',
-            r'http_certificate_pinning',
-            r'setTrustedCertificates',
-            r'ssl_pinning_plugin',
-        ]
-    },
+    # V013 has been moved to a project-level pubspec.yaml check
+    # (see scanner.py _check_pubspec_security method)
+    # Old approach: matching Dio() / http.Client() per line → massive false positives
+    # New approach: check if app uses HTTP clients but has no cert pinning package
 ]

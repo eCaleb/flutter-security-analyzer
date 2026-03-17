@@ -18,16 +18,17 @@ PRIVACY_PATTERNS = [
         'cwe_id': 'CWE-250',
         'remediation': 'Review and minimize required permissions. Request permissions at runtime only when needed. Clearly explain to users why each permission is required.',
         'patterns': [
-            # Patterns detecting permission requests - requires manifest parsing for full detection
-            r'Permission\.(?:camera|microphone|location|contacts|calendar|sms|storage|phone)',
-            r'permission\s*:\s*["\'](?:camera|microphone|location|contacts|storage|phone)',
-            r'requestPermission\s*\([^)]*\)',
-            r'uses-permission.*(?:CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|READ_CONTACTS|READ_SMS|READ_PHONE_STATE)',
+            # Only flag Android manifest entries requesting dangerous permissions
+            # Individual Dart permission.request() calls are normal Flutter behaviour
+            r'uses-permission.*(?:CAMERA|RECORD_AUDIO|ACCESS_FINE_LOCATION|READ_CONTACTS|READ_SMS|READ_PHONE_STATE|READ_CALL_LOG|READ_EXTERNAL_STORAGE)',
+            # Flag requesting many permissions in a single batch (4+ = suspicious)
+            r'await\s*\[.*Permission\.\w+.*Permission\.\w+.*Permission\.\w+.*Permission\.\w+.*\]\.request\(\)',
         ],
         'false_positive_patterns': [
             r'permissionStatus',
             r'isGranted',
             r'checkPermission',
+            r'<!--',  # Commented-out manifest entries
         ]
     },
     {

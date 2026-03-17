@@ -121,7 +121,8 @@ class RegexPattern(BasePattern):
         remediation: str,
         cwe_id: str,
         patterns: List[str],
-        false_positive_patterns: Optional[List[str]] = None
+        false_positive_patterns: Optional[List[str]] = None,
+        context_false_positive_patterns: Optional[List[str]] = None
     ):
         self.vulnerability_id = vulnerability_id
         self.title = title
@@ -133,6 +134,7 @@ class RegexPattern(BasePattern):
         self.cwe_id = cwe_id
         self.patterns = patterns
         self.false_positive_patterns = false_positive_patterns or []
+        self.context_false_positive_patterns = context_false_positive_patterns or []
         
         super().__init__()
         
@@ -140,15 +142,42 @@ class RegexPattern(BasePattern):
             re.compile(p, re.MULTILINE | re.IGNORECASE)
             for p in self.false_positive_patterns
         ]
+        self._context_fp_compiled = [
+            re.compile(p, re.MULTILINE | re.IGNORECASE)
+            for p in self.context_false_positive_patterns
+        ]
     
     def _is_false_positive(self, match: re.Match, content: str, lines: List[str], line_number: int) -> bool:
-        """Check for false positives."""
+        """Check for false positives using two strategies:
+        
+        1. LINE-LEVEL: Check the matched line against false_positive_patterns
+           (e.g., comment markers, placeholder text)
+        2. CONTEXT-LEVEL: Check surrounding lines (3 above, 1 below) against
+           context_false_positive_patterns (e.g., kDebugMode guard clauses)
+        
+        Why context matters:
+        In Flutter/Dart, guard clauses like 'if (kDebugMode)' appear on the
+        line ABOVE the matched code. Checking only the matched line misses
+        these guards, causing false positives for V018 and V003.
+        """
         if super()._is_false_positive(match, content, lines, line_number):
             return True
         
+        # Step 1: Check the MATCHED LINE against all FP patterns
         line = lines[line_number - 1]
         for fp_pattern in self._fp_compiled:
             if fp_pattern.search(line):
                 return True
+        
+        # Step 2: Check SURROUNDING CONTEXT against context FP patterns only
+        # Context window: 3 lines above + matched line + 1 line below
+        if self._context_fp_compiled:
+            context_start = max(0, line_number - 4)
+            context_end = min(len(lines), line_number + 1)
+            context_text = ' '.join(lines[context_start:context_end])
+            
+            for fp_pattern in self._context_fp_compiled:
+                if fp_pattern.search(context_text):
+                    return True
         
         return False

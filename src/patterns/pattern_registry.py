@@ -100,7 +100,8 @@ class PatternRegistry:
             remediation=pattern_def['remediation'],
             cwe_id=pattern_def.get('cwe_id', ''),
             patterns=pattern_def['patterns'],
-            false_positive_patterns=pattern_def.get('false_positive_patterns', [])
+            false_positive_patterns=pattern_def.get('false_positive_patterns', []),
+            context_false_positive_patterns=pattern_def.get('context_false_positive_patterns', [])
         )
     
     def get_all_patterns(self) -> List[BasePattern]:

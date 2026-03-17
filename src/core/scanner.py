@@ -397,4 +397,51 @@ class SecurityScanner:
                 confidence='high'
             ))
         
+        # =====================================================
+        # V013: Check for certificate pinning packages
+        # Only flag if app uses HTTP clients (Dio, http, HttpClient)
+        # but has no certificate pinning package installed
+        # =====================================================
+        
+        # Step 1: Check if app uses HTTP client libraries
+        http_client_indicators = [
+            r'dio',               # Dio package
+            r'package:http/',     # http package
+            r'HttpClient',        # dart:io HttpClient
+        ]
+        
+        uses_http_clients = any(
+            re.search(indicator, dart_files_content)
+            for indicator in http_client_indicators
+        )
+        
+        # Step 2: Check pubspec.yaml for cert pinning packages
+        cert_pinning_packages = [
+            'http_certificate_pinning',
+            'ssl_pinning_plugin',
+            'dio_http2_adapter',
+            'certificate_pinning',
+            'trust_fall',
+            'freerasp',          # freeRASP also includes cert pinning
+        ]
+        
+        has_cert_pinning = any(pkg in pubspec_content for pkg in cert_pinning_packages)
+        
+        # Step 3: If app uses HTTP clients but no pinning, flag it
+        if uses_http_clients and not has_cert_pinning:
+            findings.append(Finding(
+                vulnerability_id='V013',
+                title='Missing Certificate Pinning',
+                description='App uses HTTP client libraries (Dio, http, or HttpClient) but does not include a certificate pinning package. Without pinning, attackers with CA-signed certificates can perform man-in-the-middle attacks.',
+                severity='medium',
+                file_path=str(pubspec_path),
+                line_number=1,
+                code_snippet='# HTTP client usage detected but no certificate pinning package found in dependencies',
+                masvs_category='NETWORK',
+                masvs_control='MASVS-NETWORK-2',
+                remediation='Add a certificate pinning package to pubspec.yaml. Recommended: http_certificate_pinning, ssl_pinning_plugin, or dio_http2_adapter. Pin to leaf certificate or public key hash.',
+                cwe_id='CWE-295',
+                confidence='high'
+            ))
+        
         return findings
