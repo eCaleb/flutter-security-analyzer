@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find . -name .env* -o -name *credentials* -o -name *secret* -o -name *password* -o -name *apikey* -o -name *api_key*)"
+    ]
+  }
+}

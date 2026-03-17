@@ -996,7 +996,7 @@ class TestBeyondSelfRefinements(unittest.TestCase):
     
     def test_v001_catches_real_api_key(self):
         """V001 should detect a real Google API key."""
-        code = 'static String googlePlaceAPIkey = "AIzaSyAZclYMC5je43TrDrv6DU_ukUKbenjfxGA";'
+        code = 'static String googlePlaceAPIkey = "AIzaFAKEKEYFORTESTINGONLY00000000000";'
         matches = self.patterns['V001'].search(code, code.split('\n'))
         self.assertGreater(len(matches), 0, "Should detect real API key")
     

@@ -23,7 +23,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 // =============================================================================
 class ApiConfig {
   // VULNERABLE: Hardcoded API keys
-  static const apiKey = 'sk-1234567890abcdef1234567890abcdef';
+  static const apiKey = 'FAKE_API_KEY_FOR_TESTING_ONLY_1234';
   static const String secretKey = 'my_super_secret_key_12345';
   static final password = 'admin123password';
   static const token =
