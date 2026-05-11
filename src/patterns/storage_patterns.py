@@ -27,13 +27,12 @@ STORAGE_PATTERNS = [
             r'//.*(?:api[_-]?key|password|token)',
             r'\*.*(?:api[_-]?key|password|token)',
             r'TODO|FIXME|example|placeholder|your[_-]?key|<.*>',
-            # Route/endpoint/key name constants (e.g., 'forgot_password', 'refresh_token')
-            # These are lowercase_snake_case strings, not actual secrets
-            r"""static\s+const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z_]{3,30}['"]""",
+            # NOTE: Config constants (kebab-case, snake_case, kOption*, *Key variables)
+            # are now handled by the shared Dart/Flutter whitelist in base_pattern.py
+            # The following are V001-specific FP filters:
             # UI label strings (e.g., 'Password', 'Enter password')
             r"""['"](Enter\s+|Confirm\s+|New\s+|Old\s+|Current\s+)?[Pp]assword['"]\s*[,;)\]]""",
             # UI display strings with spaces (e.g., 'Forgot Password?', 'Reset Password')
-            # Real secrets don't contain spaces
             r"""(?:const|final)\s+(?:\w+\s+)*\w+\s*=\s*['"][^'"]*\s+[^'"]*(?:[Pp]assword|[Tt]oken)[^'"]*['"]""",
             # Short string values (less than 8 chars) that happen to contain keyword
             r"""(?:password|token|secret|key)\s*[:=]\s*['"][^'"]{0,7}['"]""",
@@ -83,6 +82,11 @@ STORAGE_PATTERNS = [
         ],
         'false_positive_patterns': [
             r'kDebugMode\s*\?\s*print',
+            # NOTE: Function declarations, function calls, kOption constants,
+            # super.key, and .keys are now handled by the shared whitelist.
+            # V003-specific FP filters:
+            # Log messages that mention keywords in a descriptive/error context
+            r"""(?:print|log|debugPrint)\s*\(\s*['"][^'"]*(?:Ignore|Failed|Error|Invalid|Wrong|Missing|Disabled|not enabled)[^'"]*(?:password|token|auth|session)""",
         ],
         'context_false_positive_patterns': [
             r'kReleaseMode',

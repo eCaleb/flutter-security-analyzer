@@ -41,7 +41,8 @@ PRIVACY_PATTERNS = [
         'cwe_id': 'CWE-359',
         'remediation': 'Avoid collecting persistent device identifiers. Use instance-specific identifiers that reset on reinstall. For advertising, use the platform advertising ID with user consent.',
         'patterns': [
-            r'androidId',
+            # Only match androidId when it's being READ from device info, not used as a named parameter
+            r'\.androidId\b',
             r'Settings\.Secure\.ANDROID_ID',
             r'getIMEI\s*\(',
             r'getMacAddress\s*\(',
@@ -54,6 +55,10 @@ PRIVACY_PATTERNS = [
             r'advertisingId.*consent',
             r'privacyPolicy',
             r'userConsent',
+            # Named parameters for store product IDs (e.g., androidId: 'com.app.product')
+            r"""androidId\s*:\s*['"]""",
+            # Constructor field declarations (e.g., required this.androidId)
+            r'this\.androidId',
         ]
     },
 ]

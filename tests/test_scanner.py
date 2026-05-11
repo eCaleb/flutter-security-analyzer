@@ -25,6 +25,55 @@ import re
 
 
 # ============================================================================
+# SHARED DART/FLUTTER LANGUAGE WHITELIST (mirrors base_pattern.py)
+# Common patterns that are never vulnerabilities, checked before all patterns
+# ============================================================================
+
+_TEST_DART_WHITELIST = [
+    # 1. Naming conventions
+    r'(?:const\s+(?:\w+\s+)*)?_?k(?:Option|Key|Window|Event|Default|Min|Max|Is|Has|Enable|Disable|Allow)\w*\s*=',
+    r'(?:void|Future|FutureOr|Stream|Widget|Function|static|bool|String|int|double|dynamic|List|Map|Set|Iterator|Iterable|num)\s*<?[\w,\s]*>?\s+\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential|[Cc]ertificate)\w*\s*[<(]',
+    r'(?:wrong|show|on|handle|validate|check|verify|reset|forgot|change|update|set|get|create|build|clear|close|open|init|dispose|notify|parse|format|encode|decode|fetch|load|save|store|delete|remove|revoke|refresh|invalidate|emit|yield|return|throw|assert|expect|mock|stub|fake|when|verify|find|lookup|resolve|provide|inject|register|unregister|observe|watch|listen|subscribe|cancel|start|stop|toggle|enable|disable|grant|deny|request|approve|reject|confirm|accept|decline|prompt|ask|require|ensure|sanitize|hash|compare|match|test|is|has|can|should|will|must|need|try|attempt|process|convert|transform|map|filter|reduce|sort|group|merge|split|join|wrap|unwrap|extract|insert|append|prepend|push|pop|peek|enqueue|dequeue)\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential|[Cc]ertificate)\w*\s*[<(]',
+    r'(?:class|mixin|extension|enum|typedef)\s+\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential|[Cc]ertificate)\w*',
+    r'(?:[A-Z]\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential|[Cc]ertificate)\w*)\s+\w+\s*[;=,)\]]',
+    r'(?:List|Map|Set|Future|Stream|Iterable|FutureOr|ValueNotifier|StateNotifier|ChangeNotifier|Provider|Riverpod)<\s*\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*\s*>',
+    r'\w+(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*\.\w+(?:\s*[;,)\]:]|\s*$)',
+    r'_\$\w*(?:[Ss]ession|[Tt]oken|[Kk]ey|[Pp]assword|[Aa]uth|[Cc]redential|[Ss]ecret)',
+    r'Field<\w*(?:[Ss]ession|[Tt]oken|[Kk]ey|[Pp]assword|[Aa]uth|[Cc]redential|[Ss]ecret)',
+    r'\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*\.(?:from[A-Z]\w*|create|initial|empty|none|unknown|defaults?|copy[Ww]ith|to[A-Z]\w*|parse|try[A-Z]\w*)\s*\(',
+    r'(?:get|set)\s+\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*',
+    r'(?:bool|int|double|num)\s+(?:is|has|can|should|needs?|was|will|did)\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*',
+    # 2. Language features
+    r'super\.key',
+    r'\w+\.keys\b(?!\s*[:=])',
+    r'(?:password|pin|token|secret|key|credential|session)(?:\?)?\.(?:isNotEmpty|isEmpty)\b',
+    r'if\s*\(\s*(?:pin|password|token|secret|credential|session)\s*[!=]=\s*null\s*\)',
+    r'(?:required\s+)?this\.(?:androidId|sessionId|tokenId|keyId|authId|passwordController|tokenExpiry|sessionTimeout|authState|keyStore|pinController|credentialManager)',
+    r"""@(?:JsonKey|HiveField|HiveType|FreezedUnionValue|Default|JsonSerializable|MappableField|BuiltValue|column|Column|Entity)\s*\([^)]*(?:password|token|secret|auth|session|key|pin|credential)""",
+    r'typedef\s+\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey|[Pp]in|[Cc]redential)\w*\s*=',
+    r'\w*(?:[Pp]assword|[Tt]oken|[Ss]ession|[Aa]uth|[Kk]ey|[Pp]in)\w*\s*\.\.',
+    r"""(?:import|export|part)\s+['"].*(?:password|token|secret|auth|session|key|pin|credential)""",
+    r'(?:Text|title|label|hint|message|description|tooltip|placeholder|helperText|errorText|counterText|prefixText|suffixText|semanticLabel)\s*[:(]\s*["\'].*(?:password|token|session|auth|key|pin)',
+    r'(?:expect|verify|when|setUp|tearDown|group|test|testWidgets)\s*\(.*(?:password|token|secret|auth|session|key|pin|credential)',
+    # 3. Configuration patterns
+    r"""(?:const|final)\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z][a-z\-]{2,60}['"]""",
+    r"""static\s+const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z_]{3,30}['"]""",
+    r"""(?:const|final)\s+(?:\w+\s+)*(?!api[Kk]ey|secret[Kk]ey|private[Kk]ey|auth[Kk]ey|aes[Kk]ey|encryption[Kk]ey|hmac[Kk]ey|signing[Kk]ey|master[Kk]ey|server[Kk]ey|client[Kk]ey)\w*[Kk]ey\w*\s*=\s*['"][^'"]{3,60}['"]""",
+    r"""const\s+_\w+\s*=\s*['"](?:ls_|app_|pref_|sp_|hive_|box_|cache_|db_|store_)[^'"]+['"]""",
+    r"""androidId\s*:\s*['"]""",
+    r"""(?:Platform\.environment|dotenv\.(?:get|env)|String\.fromEnvironment|bool\.fromEnvironment|int\.fromEnvironment|const\.fromEnvironment)\s*[\[(]\s*['"]""",
+    r"""\w+\s*\[\s*['"](?:password|token|secret|auth|session|key|pin|credential)[^'"]*['"]\s*\]""",
+    r"""(?:route|path|url|uri|endpoint|api)\s*[:=]\s*['"][^'"]*(?:password|token|auth|session|login|logout|register|verify|reset|forgot)[^'"]*['"]""",
+    r"""(?:static\s+)?const\s+\w*(?:[Kk]ey|[Nn]ame|[Ff]ield|[Cc]olumn|[Pp]roperty)\s*=\s*['"][^'"]*(?:password|token|auth|session|secret|pin|credential)[^'"]*['"]""",
+    r"""(?:throw\s+\w*(?:Exception|Error|Failure)|(?:Exception|Error|Failure|FormatException|ArgumentError|StateError|AssertionError)\s*\()\s*['"][^'"]*(?:password|token|auth|session|secret|key|pin|credential)""",
+]
+
+_TEST_COMPILED_WHITELIST = [
+    re.compile(p, re.MULTILINE | re.IGNORECASE) for p in _TEST_DART_WHITELIST
+]
+
+
+# ============================================================================
 # MOCK CLASSES (for standalone testing without full project structure)
 # ============================================================================
 
@@ -200,18 +249,24 @@ class BasePattern:
     
     def _is_false_positive(self, match: re.Match, content: str, 
                            lines: List[str], line_number: int) -> bool:
-        line = lines[line_number - 1].strip()
+        line = lines[line_number - 1]
+        stripped = line.strip()
         
-        # Skip comments
-        if line.startswith('//') or line.startswith('/*') or line.startswith('*'):
-            return True
-        
-        # Step 1: Check MATCHED LINE against line-level FP patterns
-        for fp_pattern in self._fp_compiled:
-            if fp_pattern.search(lines[line_number - 1]):
+        # Level 1: Shared Dart/Flutter language whitelist
+        for wp in _TEST_COMPILED_WHITELIST:
+            if wp.search(line):
                 return True
         
-        # Step 2: Check SURROUNDING CONTEXT against context FP patterns
+        # Level 2: Skip comments
+        if stripped.startswith('//') or stripped.startswith('/*') or stripped.startswith('*'):
+            return True
+        
+        # Level 3: Check MATCHED LINE against line-level FP patterns
+        for fp_pattern in self._fp_compiled:
+            if fp_pattern.search(line):
+                return True
+        
+        # Level 4: Check SURROUNDING CONTEXT against context FP patterns
         # (3 lines above + matched line + 1 line below)
         if self._context_fp_compiled:
             context_start = max(0, line_number - 4)
@@ -1128,6 +1183,211 @@ class TestBeyondSelfRefinements(unittest.TestCase):
         code = "await [Permission.camera, Permission.microphone, Permission.location, Permission.contacts].request();"
         matches = self.patterns['V025'].search(code, code.split('\n'))
         self.assertGreater(len(matches), 0, "4-permission batch should be flagged")
+
+
+class TestRustDeskRefinements(unittest.TestCase):
+    """
+    Tests for pattern refinements discovered through RustDesk app scanning.
+    
+    Patterns refined: V001 (config constants), V003 (function names),
+    V009 (event constants), V010 (isNotEmpty checks)
+    """
+    
+    def setUp(self):
+        self.patterns = {}
+        from_patterns = {
+            'V001': {
+                'vulnerability_id': 'V001',
+                'title': 'Hardcoded API Keys/Secrets',
+                'description': 'Test',
+                'severity': 'high',
+                'masvs_category': 'STORAGE',
+                'masvs_control': 'MASVS-STORAGE-1',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-798',
+                'patterns': [
+                    r'(?:api[_-]?key|apikey|secret|password|token|credential|auth[_-]?token|access[_-]?token|private[_-]?key)\s*[:=]\s*["\'][^"\']{8,}["\']',
+                    r'(?:const|final)\s+\w*(?:key|secret|password|token|credential)\w*\s*=\s*["\'][^"\']+["\']',
+                    r'sk-[A-Za-z0-9]{20,}',
+                    r'Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+',
+                ],
+                'false_positive_patterns': [
+                    r'//.*(?:api[_-]?key|password|token)',
+                    r'\*.*(?:api[_-]?key|password|token)',
+                    r'TODO|FIXME|example|placeholder|your[_-]?key|<.*>',
+                    r"""static\s+const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z_]{3,30}['"]""",
+                    r"""const\s+(?:\w+\s+)*\w+\s*=\s*['"][a-z][a-z\-]{2,60}['"]""",
+                    r"""(?:const\s+(?:\w+\s+)*)?k(?:Option|Key|Window|Event)\w*\s*=""",
+                    r"""['"](Enter\s+|Confirm\s+|New\s+|Old\s+|Current\s+)?[Pp]assword['"]\s*[,;)\]]""",
+                    r"""(?:const|final)\s+(?:\w+\s+)*\w+\s*=\s*['"][^'"]*\s+[^'"]*(?:[Pp]assword|[Tt]oken)[^'"]*['"]""",
+                    r"""(?:password|token|secret|key)\s*[:=]\s*['"][^'"]{0,7}['"]""",
+                    r'(?:hint|label|placeholder|text)\s*:\s*["\'].*(?:password|token)',
+                    r"""\[['"](?:password|token|key|secret)['"]\]""",
+                ]
+            },
+            'V003': {
+                'vulnerability_id': 'V003',
+                'title': 'Logging Sensitive Data',
+                'description': 'Test',
+                'severity': 'medium',
+                'masvs_category': 'STORAGE',
+                'masvs_control': 'MASVS-STORAGE-2',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-532',
+                'patterns': [
+                    r'(?:print|log|debugPrint|logger)\s*\(.*\b(?:password|token|secret|key|credential|session|auth)',
+                    r'print\s*\(\s*["\'].*(?:password|token|secret)',
+                    r'log\s*\(\s*["\'].*(?:Auth|Token|Password)',
+                ],
+                'false_positive_patterns': [
+                    r'kDebugMode\s*\?\s*print',
+                    r'(?:void|Future|Widget|Function|static)\s+\w*(?:password|token|secret|auth|session|key)\w*\s*\(',
+                    r'(?:wrong|show|on|handle|validate|check|verify|reset|forgot|change|update|set|get|create|build)\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession|[Kk]ey)\w*\s*\(',
+                    r'k(?:Option|Key)\w*(?:[Pp]assword|[Tt]oken|[Ss]ecret|[Aa]uth|[Ss]ession)',
+                    r"""(?:print|log|debugPrint)\s*\(\s*['"][^'"]*(?:Ignore|Failed|Error|Invalid|Wrong|Missing|Disabled|not enabled)[^'"]*(?:password|token|auth|session)""",
+                ],
+                'context_false_positive_patterns': [
+                    r'kReleaseMode',
+                    r'if\s*\(\s*kDebugMode\s*\)',
+                ]
+            },
+            'V009': {
+                'vulnerability_id': 'V009',
+                'title': 'Missing Session Timeout',
+                'description': 'Test',
+                'severity': 'medium',
+                'masvs_category': 'AUTH',
+                'masvs_control': 'MASVS-AUTH-1',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-613',
+                'patterns': [
+                    r'(?:token|session).*(?:save|store|persist)(?!.*expir)',
+                    r'setString\s*\(\s*["\'](?:token|session|jwt)["\']',
+                    r'jwt_decode(?!.*exp)',
+                    r'JwtDecoder\.decode(?!.*isExpired)',
+                ],
+                'false_positive_patterns': [
+                    r'isExpired',
+                    r'expiresAt',
+                    r'tokenExpiry',
+                    r'sessionTimeout',
+                    r'refreshToken',
+                    r'k(?:Window|Event|Option)\w*(?:[Ss]ession)',
+                    r"""const\s+(?:\w+\s+)*\w*(?:[Ss]ession)\w*\s*=""",
+                    r"""['"]\s*(?:Keep|Restore|Save|Active|Display)\s+.*[Ss]ession""",
+                ]
+            },
+            'V010': {
+                'vulnerability_id': 'V010',
+                'title': 'Weak Local PIN/Password Policy',
+                'description': 'Test',
+                'severity': 'medium',
+                'masvs_category': 'AUTH',
+                'masvs_control': 'MASVS-AUTH-2',
+                'remediation': 'Test',
+                'cwe_id': 'CWE-521',
+                'patterns': [
+                    r'pin\.length\s*[=<>!]+\s*[1-5]\b',
+                    r'password\.length\s*[<>=!]+\s*[1-7]\b',
+                    r'if\s*\(\s*pin\s*!=\s*null\s*\)',
+                ],
+                'false_positive_patterns': [
+                    r'pin\.length\s*>=?\s*[6-9]',
+                    r'password\.length\s*>=?\s*(?:[8-9]|[1-9]\d)',
+                    r'RegExp.*(?:uppercase|lowercase|digit|special)',
+                    r'passwordStrength',
+                ]
+            },
+        }
+        
+        for vid, pdef in from_patterns.items():
+            self.patterns[vid] = RegexPattern(**pdef)
+    
+    # ----- V001: Config constants -----
+    
+    def test_v001_ignores_koption_password_config(self):
+        """V001 should NOT flag kOption config constants containing 'password'."""
+        code = 'const String kOptionAllowNumericOneTimePassword = "allow-numeric-one-time-password";'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "kOption config constant should not be flagged")
+    
+    def test_v001_ignores_koption_disable_password(self):
+        """V001 should NOT flag kOption constants about disabling password features."""
+        code = 'const String kOptionDisableChangePermanentPassword = "disable-change-permanent-password";'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "kOption disable password should not be flagged")
+    
+    def test_v001_ignores_kebab_case_config_value(self):
+        """V001 should NOT flag kebab-case config values (pure lowercase + hyphens)."""
+        code = 'const String kOptionRemovePresetPasswordWarning = "remove-preset-password-warning";'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Kebab-case config value should not be flagged")
+    
+    def test_v001_catches_openai_key_with_digits(self):
+        """V001 should still catch API keys that mix letters and digits."""
+        code = 'const apiKey = "sk-proj-abc123def456ghi789jkl012mno345"'
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "API key with digits should be flagged")
+    
+    # ----- V003: Function names -----
+    
+    def test_v003_ignores_function_declaration_with_password(self):
+        """V003 should NOT flag function declarations containing 'password'."""
+        code = 'void wrongPasswordDialog(SessionID sessionId,'
+        matches = self.patterns['V003'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Function declaration should not be flagged")
+    
+    def test_v003_ignores_function_call_with_password(self):
+        """V003 should NOT flag function calls like showPasswordResetDialog()."""
+        code = 'showPasswordResetDialog(context);'
+        matches = self.patterns['V003'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Function call should not be flagged")
+    
+    def test_v003_ignores_descriptive_log_about_password(self):
+        """V003 should NOT flag logs that describe password config, not print actual values."""
+        code = 'debugPrint("Ignore rustdesk://password because kOptionAllowDeepLinkPassword is not enabled.");'
+        matches = self.patterns['V003'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Descriptive log should not be flagged")
+    
+    def test_v003_catches_actual_password_logging(self):
+        """V003 should flag code that actually prints a password value."""
+        code = 'print("User password is: $password");'
+        matches = self.patterns['V003'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Actual password logging should be flagged")
+    
+    # ----- V009: Event constants -----
+    
+    def test_v009_ignores_window_event_session_constant(self):
+        """V009 should NOT flag window event constants containing 'session'."""
+        code = 'const String kWindowEventRestoreTerminalSessions = "restore_terminal_sessions";'
+        matches = self.patterns['V009'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Window event constant should not be flagged")
+    
+    def test_v009_ignores_active_session_event(self):
+        """V009 should NOT flag active session event constants."""
+        code = 'const String kWindowEventActiveSession = "active_session";'
+        matches = self.patterns['V009'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Active session event should not be flagged")
+    
+    def test_v009_catches_token_stored_without_expiry(self):
+        """V009 should flag tokens stored in prefs without expiry checking."""
+        code = "prefs.setString('token', authToken);"
+        matches = self.patterns['V009'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Token without expiry should be flagged")
+    
+    # ----- V010: isNotEmpty checks -----
+    
+    def test_v010_ignores_password_isnotempty(self):
+        """V010 should NOT flag password.isNotEmpty (standard null check)."""
+        code = 'if (password.isNotEmpty) {'
+        matches = self.patterns['V010'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "isNotEmpty null check should not be flagged")
+    
+    def test_v010_catches_weak_pin_length(self):
+        """V010 should flag weak PIN length checks."""
+        code = 'if (pin.length < 4) {'
+        matches = self.patterns['V010'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "Weak PIN length should be flagged")
 
 
 if __name__ == '__main__':

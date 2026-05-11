@@ -1,0 +1,15 @@
+# Flutter Security Scanner - Docker ignore file
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+coverage-report
+*.egg-info
+.mypy_cache
+.vscode
+.idea
+*.md
+LICENSE
+setup.py

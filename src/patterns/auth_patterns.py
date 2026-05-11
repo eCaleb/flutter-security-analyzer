@@ -51,6 +51,22 @@ AUTH_PATTERNS = [
             r'tokenExpiry',
             r'sessionTimeout',
             r'refreshToken',
+            # NOTE: kOption/kWindow/kEvent constants, code-generated model fields,
+            # and function declarations/calls with session/token in names are now
+            # handled by the shared Dart/Flutter whitelist in base_pattern.py.
+            # V009-specific FP filters:
+            # UI labels and display strings mentioning sessions
+            r"""['"]\s*(?:Keep|Restore|Save|Active|Display)\s+.*[Ss]ession""",
+            # Terminal/connection session management (not auth sessions)
+            r'(?:terminal|persistent|restore|close|cleanup)\w*[Ss]ession',
+            # Variables named *TokenKey or *token used for non-auth purposes
+            r'(?:restore|wayland|tab)\w*[Tt]oken',
+            # Sorted/filtered session lists (data processing, not session storage)
+            r'(?:sorted|filtered|persistent)[Ss]essions',
+            # ReceiveSession data models (file transfer sessions, not auth sessions)
+            r'Receive[Ss]ession',
+            # Display/show tokens (UI tokens, not auth tokens)
+            r'[Ss]how[Tt]oken',
         ]
     },
     {
@@ -65,8 +81,9 @@ AUTH_PATTERNS = [
         'patterns': [
             r'pin\.length\s*[=<>!]+\s*[1-5]\b',
             r'password\.length\s*[<>=!]+\s*[1-7]\b',
-            r'if\s*\(\s*pin\s*!=\s*null\s*\)',
-            r'if\s*\(\s*password\.isNotEmpty\s*\)',
+            # Removed: if (pin != null) — standard null check, not weak validation
+            # Only flag isNotEmpty when it's the SOLE validation before using the password
+            # password.isNotEmpty as a null check before storage/transmission is normal
         ],
         'false_positive_patterns': [
             r'pin\.length\s*>=?\s*[6-9]',
