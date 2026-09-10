@@ -41,6 +41,8 @@ cd flutter-security-analyzer
 
 # Install dependencies (optional - for development)
 pip install -r requirements.txt
+# or if pip is not on your PATH:
+pip3 install -r requirements.txt
 
 # Or install as a package
 pip install -e .
