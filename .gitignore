@@ -31,3 +31,4 @@ doc/api/
 # Scanner output files
 results.json
 *.report.json
+".claude" 
