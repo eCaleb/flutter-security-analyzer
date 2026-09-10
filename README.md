@@ -36,7 +36,7 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 ```
 bash
 # Clone the repository
-git clone https://github.com/calebelebhose/flutter-security-analyzer.git
+git clone https://github.com/eCaleb/flutter-security-analyzer.git
 cd flutter-security-analyzer
 
 # Install dependencies (optional - for development)
