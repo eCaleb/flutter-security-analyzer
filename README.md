@@ -2,7 +2,7 @@
 
 A static analysis tool for detecting security vulnerabilities in Flutter/Dart applications with OWASP MASVS v2.1.0 compliance mapping.
 
-## 🎓 Academic Project
+##  Academic Project
 
 This tool is developed as part of an MSc Cybersecurity final year project at the University of Chester.
 
@@ -10,7 +10,7 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 **Supervisor:** Dr. Bismark Asare  
 **Module:** WB7103/WB7104
 
-## 🔍 Features
+##  Features
 
 - **Pattern-Based Detection**: Regex-based vulnerability detection for Dart code
 - **MASVS Compliance Mapping**: All findings mapped to OWASP MASVS v2.1.0 controls
@@ -18,7 +18,7 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 - **CI/CD Integration**: Exit codes suitable for pipeline integration
 - **26+ Vulnerability Patterns**: Covering all 8 MASVS categories
 
-## 📋 MASVS Categories Covered
+##  MASVS Categories Covered
 
 | Category | Description | Patterns |
 |----------|-------------|----------|
@@ -31,13 +31,13 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 | RESILIENCE | Anti-reverse engineering | 4 |
 | PRIVACY | User privacy protection | 4 |
 
-## 🚀 Installation
+##  Installation
 
 ```
 bash
 # Clone the repository
-git clone https://github.com/calebelebhose/flutter-security-scanner.git
-cd flutter-security-scanner
+git clone https://github.com/calebelebhose/flutter-security-analyzer.git
+cd flutter-security-analyzer
 
 # Install dependencies (optional - for development)
 pip install -r requirements.txt
@@ -46,7 +46,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## 📖 Usage
+##  Usage
 
 ### Basic Scan
 
@@ -92,7 +92,7 @@ bash
 python src/main.py ./my_flutter_app -v
 ```
 
-## 🔧 CI/CD Integration
+##  CI/CD Integration
 
 ### Exit Codes
 
@@ -106,21 +106,21 @@ python src/main.py ./my_flutter_app -v
 yaml
 - name: Security Scan
   run: |
-    pip install flutter-security-scanner
-    flutter-security-scanner ./lib -f json -o security-results.json
+    pip install flutter-security-analyzer
+    flutter-security-analyzer ./lib -f json -o security-results.json
 ```
 
 ### Docker
 
 ```
 bash
-docker run -v $(pwd):/app flutter-security-scanner /app
+docker run -v $(pwd):/app flutter-security-analyzer /app
 ```
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
-flutter-security-scanner/
+flutter-security-analyzer/
 ├── src/
 │   ├── main.py              # CLI entry point
 │   ├── core/
@@ -152,7 +152,7 @@ flutter-security-scanner/
 └── README.md
 ```
 
-## 🧪 Testing
+##  Testing
 
 ```
 bash
@@ -163,11 +163,11 @@ pytest
 pytest --cov=src tests/
 ```
 
-## 📄 License
+##  License
 
 MIT License - See LICENSE file for details.
 
-## 🙏 Acknowledgements
+##  Acknowledgements
 
 - OWASP Mobile Application Security Project
 - University of Chester Cybersecurity Department
