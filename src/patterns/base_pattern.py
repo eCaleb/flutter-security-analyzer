@@ -7,7 +7,9 @@ false positive patterns before individual vulnerability patterns run.
 """
 
 import re
+import math
 from abc import ABC, abstractmethod
+from collections import Counter
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -220,6 +222,107 @@ _COMPILED_WHITELIST = [
 ]
 
 
+# ============================================================================
+# SECRET VALUE HEURISTICS (V001 - Hardcoded API Keys/Secrets)
+#
+# V001's name-based patterns fire whenever an identifier contains "key",
+# "secret", "password", "token" etc. That produces false positives on things
+# like `carbonPassword = 'assets/icons/carbon_password.svg'` (an asset path)
+# or `forgotPassword = '/forgot_password'` (a route). These helpers add a
+# check that the matched STRING VALUE actually looks like a credential, not
+# just that the variable name contains a security keyword.
+# ============================================================================
+
+# Well-known credential formats - if the value matches one of these it is a
+# secret regardless of length/entropy (e.g. Firebase's AIza... web API keys).
+_KNOWN_SECRET_FORMATS = [
+    re.compile(r'^(?:sk|pk|rk)-[A-Za-z0-9_-]{10,}$'),          # OpenAI/Stripe-style
+    re.compile(r'^AIza[0-9A-Za-z_-]{10,}$'),                   # Google / Firebase
+    re.compile(r'^(?:gh[posu]|github_pat)_[A-Za-z0-9_]{20,}$'),  # GitHub tokens
+    re.compile(r'^xox[baprs]-[A-Za-z0-9-]{10,}$'),             # Slack tokens
+    re.compile(r'^AKIA[0-9A-Z]{16}$'),                         # AWS access key id
+    re.compile(r'^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'),  # JWT
+    re.compile(r'^[0-9a-fA-F]{32,}$'),                         # long hex secret
+]
+
+_ASSET_EXTENSION_RE = re.compile(
+    r'\.(?:svg|png|jpe?g|gif|webp|json|ya?ml|dart|txt|pdf|mp[34]|ttf|otf|riv|lottie|html?|css|xml)$',
+    re.IGNORECASE,
+)
+_ASSET_PATH_PREFIXES = ('assets/', 'lib/', 'packages/', 'fonts/', 'images/', 'icons/')
+# Multi-segment snake_case / kebab-case: route names, preference keys, config
+# option ids ('forgot_password', 'refresh_token', 'allow-deep-link-password').
+# A separator is required so single opaque words ('secret', 'hunter2') are NOT
+# treated as identifiers and still get flagged.
+_MULTI_SEGMENT_ID_RE = re.compile(r'^[a-z0-9]+(?:[_-][a-z0-9]+)+$')
+_PLAIN_URL_RE = re.compile(r'^https?://[^\s@]+$', re.IGNORECASE)
+
+_STRING_LITERAL_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+
+# A long value with almost no variety (e.g. 'xxxxxxxxxxxxxxxx') is a redaction
+# or placeholder, not a real secret.
+_PLACEHOLDER_MIN_LENGTH = 12
+_PLACEHOLDER_MAX_ENTROPY = 2.0
+
+
+def _shannon_entropy(value: str) -> float:
+    """Return the Shannon entropy of a string in bits per character."""
+    if not value:
+        return 0.0
+    counts = Counter(value)
+    length = len(value)
+    return -sum(
+        (count / length) * math.log2(count / length)
+        for count in counts.values()
+    )
+
+
+def _extract_string_literals(text: str) -> List[str]:
+    """Extract the contents of every single- or double-quoted literal in text."""
+    return [a or b for a, b in _STRING_LITERAL_RE.findall(text)]
+
+
+def looks_like_secret(value: str) -> bool:
+    """Heuristic: does this string VALUE look like an actual credential?
+
+    Used to filter V001 false positives where a security keyword appears in
+    the variable name but the assigned value is an asset path, route, URL,
+    or other non-secret.
+    """
+    v = value.strip()
+
+    # 1. Known credential formats are always secrets (covers Firebase AIza keys).
+    for fmt in _KNOWN_SECRET_FORMATS:
+        if fmt.match(v):
+            return True
+
+    # 2. Structural non-secrets - the shapes the reviewer flagged as false
+    #    positives (asset paths, routes, config-option ids, display strings).
+    if not v:
+        return False
+    if any(ch.isspace() for ch in v):           # human-readable text
+        return False
+    if v.startswith(('/', './', '../')):        # route / relative path
+        return False
+    if v.lower().startswith(_ASSET_PATH_PREFIXES):
+        return False
+    if _ASSET_EXTENSION_RE.search(v):           # asset filename
+        return False
+    if _PLAIN_URL_RE.match(v):                  # URL with no embedded credentials
+        return False
+    if _MULTI_SEGMENT_ID_RE.match(v):           # snake_case / kebab-case identifier
+        return False
+
+    # 3. Long, near-zero-variety strings are placeholders / redactions.
+    if len(v) >= _PLACEHOLDER_MIN_LENGTH and _shannon_entropy(v) < _PLACEHOLDER_MAX_ENTROPY:
+        return False
+
+    # 4. Anything else assigned to a secret-named identifier is treated as a
+    #    real credential. Missing a hardcoded secret is worse than an occasional
+    #    false positive on an opaque value.
+    return True
+
+
 class BasePattern(ABC):
     """
     Abstract base class for vulnerability detection patterns.
@@ -396,5 +499,16 @@ class RegexPattern(BasePattern):
             for fp_pattern in self._context_fp_compiled:
                 if fp_pattern.search(context_text):
                     return True
-        
+
+        # Step 3: V001 value-shape gate.
+        # The name-based V001 patterns match on the identifier ("...password = ").
+        # Require the assigned string VALUE to actually look like a credential,
+        # otherwise it is a false positive (asset path, route, plain word, etc.).
+        # Matches with no quoted literal (sk-... / Bearer <jwt> patterns) are
+        # left untouched.
+        if self.vulnerability_id == 'V001':
+            literals = _extract_string_literals(match.group())
+            if literals and not any(looks_like_secret(lit) for lit in literals):
+                return True
+
         return False

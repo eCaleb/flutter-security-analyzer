@@ -22,6 +22,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Any
 import re
+import math
+from collections import Counter
 
 
 # ============================================================================
@@ -71,6 +73,67 @@ _TEST_DART_WHITELIST = [
 _TEST_COMPILED_WHITELIST = [
     re.compile(p, re.MULTILINE | re.IGNORECASE) for p in _TEST_DART_WHITELIST
 ]
+
+
+# ============================================================================
+# SECRET VALUE HEURISTICS (mirrors base_pattern.py - V001 value-shape gate)
+# ============================================================================
+
+_KNOWN_SECRET_FORMATS = [
+    re.compile(r'^(?:sk|pk|rk)-[A-Za-z0-9_-]{10,}$'),
+    re.compile(r'^AIza[0-9A-Za-z_-]{10,}$'),
+    re.compile(r'^(?:gh[posu]|github_pat)_[A-Za-z0-9_]{20,}$'),
+    re.compile(r'^xox[baprs]-[A-Za-z0-9-]{10,}$'),
+    re.compile(r'^AKIA[0-9A-Z]{16}$'),
+    re.compile(r'^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$'),
+    re.compile(r'^[0-9a-fA-F]{32,}$'),
+]
+_ASSET_EXTENSION_RE = re.compile(
+    r'\.(?:svg|png|jpe?g|gif|webp|json|ya?ml|dart|txt|pdf|mp[34]|ttf|otf|riv|lottie|html?|css|xml)$',
+    re.IGNORECASE,
+)
+_ASSET_PATH_PREFIXES = ('assets/', 'lib/', 'packages/', 'fonts/', 'images/', 'icons/')
+_MULTI_SEGMENT_ID_RE = re.compile(r'^[a-z0-9]+(?:[_-][a-z0-9]+)+$')
+_PLAIN_URL_RE = re.compile(r'^https?://[^\s@]+$', re.IGNORECASE)
+_STRING_LITERAL_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+_PLACEHOLDER_MIN_LENGTH = 12
+_PLACEHOLDER_MAX_ENTROPY = 2.0
+
+
+def _shannon_entropy(value: str) -> float:
+    if not value:
+        return 0.0
+    counts = Counter(value)
+    length = len(value)
+    return -sum((c / length) * math.log2(c / length) for c in counts.values())
+
+
+def _extract_string_literals(text: str) -> List[str]:
+    return [a or b for a, b in _STRING_LITERAL_RE.findall(text)]
+
+
+def looks_like_secret(value: str) -> bool:
+    v = value.strip()
+    for fmt in _KNOWN_SECRET_FORMATS:
+        if fmt.match(v):
+            return True
+    if not v:
+        return False
+    if any(ch.isspace() for ch in v):
+        return False
+    if v.startswith(('/', './', '../')):
+        return False
+    if v.lower().startswith(_ASSET_PATH_PREFIXES):
+        return False
+    if _ASSET_EXTENSION_RE.search(v):
+        return False
+    if _PLAIN_URL_RE.match(v):
+        return False
+    if _MULTI_SEGMENT_ID_RE.match(v):
+        return False
+    if len(v) >= _PLACEHOLDER_MIN_LENGTH and _shannon_entropy(v) < _PLACEHOLDER_MAX_ENTROPY:
+        return False
+    return True
 
 
 # ============================================================================
@@ -276,7 +339,13 @@ class BasePattern:
             for fp_pattern in self._context_fp_compiled:
                 if fp_pattern.search(context_text):
                     return True
-        
+
+        # Level 5: V001 value-shape gate (mirrors base_pattern.py)
+        if self.vulnerability_id == 'V001':
+            literals = _extract_string_literals(match.group())
+            if literals and not any(looks_like_secret(lit) for lit in literals):
+                return True
+
         return False
 
 
@@ -497,7 +566,7 @@ String password = "real";'''
     def test_search_skips_false_positives(self):
         """Test search() skips false positive patterns."""
         content = '''// TODO: password = "placeholder";
-String password = "real_secret";'''
+String password = "s3cr3tK3yV4lu3";'''
         lines = content.split('\n')
         
         matches = self.pattern.search(content, lines)
@@ -999,11 +1068,11 @@ class TestBeyondSelfRefinements(unittest.TestCase):
                 'remediation': 'Test',
                 'cwe_id': 'CWE-489',
                 'patterns': [
-                    r'(?:debugMode|isDebug)\s*[:=]\s*true',
+                    r'(?:debugMode|isDebug|isDebugMode|enableDebug|debugEnabled|devMode)\s*[:=]\s*true\b',
                     r'kDebugMode\s*\?\s*true',
-                    r'const\s+bool\s+isDebug\s*=\s*true',
+                    r'(?:const|static|final|var)\s+(?:bool\s+)?(?:debugMode|isDebug|devMode)\s*=\s*true\b',
                     r'assert\s*\(\s*debugMode\s*==\s*true\s*\)',
-                    r'debugPrint\s*\(',
+                    r'debug(?:Paint\w*|PrintRebuild\w*|PrintMarkNeedsLayout|RepaintRainbow)\s*=\s*true',
                 ],
                 'false_positive_patterns': [
                     r'kDebugMode\s*\?\s*true',
@@ -1096,6 +1165,30 @@ class TestBeyondSelfRefinements(unittest.TestCase):
         code = "static const String refreshToken = 'refresh_token';"
         matches = self.patterns['V001'].search(code, code.split('\n'))
         self.assertEqual(len(matches), 0, "Key name constant should not be flagged")
+
+    def test_v001_ignores_asset_path_in_password_named_const(self):
+        """V001 should NOT flag an asset filename assigned to a *Password constant."""
+        code = "  static const String carbonPassword = 'assets/icons/carbon_password.svg';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Asset path value should not be flagged")
+
+    def test_v001_ignores_route_path_in_password_named_const(self):
+        """V001 should NOT flag a route string assigned to a *Password constant."""
+        code = "  static const String forgotPassword = '/forgot_password';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Route path value should not be flagged")
+
+    def test_v001_catches_high_entropy_hardcoded_secret(self):
+        """V001 should still flag a high-entropy value in a *Key constant."""
+        code = "  const secretKey = 'a8Fk2Lm9Qp4Xz7Rw1Nc6Bv3Ht5Yd0Ss';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertGreater(len(matches), 0, "High-entropy hardcoded secret should be flagged")
+
+    def test_v001_ignores_redaction_placeholder_value(self):
+        """V001 should NOT flag an obvious redaction placeholder value."""
+        code = "  static const String apiKey = 'xxxxxxxxxxxxxxxxxxxx';"
+        matches = self.patterns['V001'].search(code, code.split('\n'))
+        self.assertEqual(len(matches), 0, "Redaction placeholder should not be flagged")
     
     # ----- V002: SharedPreferences -----
     
@@ -1136,27 +1229,34 @@ class TestBeyondSelfRefinements(unittest.TestCase):
         self.assertGreater(len(matches), 0, "Auth token in SharedPrefs should be flagged")
     
     # ----- V018: Debug Mode -----
-    
+
+    def test_v018_ignores_plain_debugprint(self):
+        """V018 should NOT flag plain debugPrint() calls (standard Flutter API)."""
+        code = 'void doSomething() {\n  debugPrint("Payload: ${jsonEncode(payload)}");\n  return;\n}'
+        lines = code.split('\n')
+        matches = self.patterns['V018'].search(code, lines)
+        self.assertEqual(len(matches), 0, "Plain debugPrint should not be flagged by V018")
+
     def test_v018_ignores_guarded_debugprint(self):
         """V018 should NOT flag debugPrint inside kDebugMode guard."""
         code = "  } catch (e) {\n    if (kDebugMode) {\n      debugPrint('AuthCubit: failed');\n    }\n  }"
         lines = code.split('\n')
         matches = self.patterns['V018'].search(code, lines)
         self.assertEqual(len(matches), 0, "Guarded debugPrint should not be flagged")
-    
-    def test_v018_catches_unguarded_debugprint(self):
-        """V018 should flag debugPrint NOT inside kDebugMode guard."""
-        code = 'void doSomething() {\n  debugPrint("Certificate check for: $host:$port");\n  return;\n}'
+
+    def test_v018_catches_debug_mode_toggle(self):
+        """V018 should flag an actual debug-mode flag left switched on."""
+        code = 'class Config {\n  static const bool debugMode = true;\n}'
         lines = code.split('\n')
         matches = self.patterns['V018'].search(code, lines)
-        self.assertGreater(len(matches), 0, "Unguarded debugPrint should be flagged")
-    
-    def test_v018_ignores_debugprint_with_release_mode_check(self):
-        """V018 should NOT flag debugPrint near kReleaseMode check."""
-        code = "  if (!kReleaseMode) {\n    debugPrint('Debug info');\n  }"
+        self.assertGreater(len(matches), 0, "debugMode = true toggle should be flagged")
+
+    def test_v018_catches_debug_paint_toggle(self):
+        """V018 should flag Flutter debug-rendering toggles left enabled."""
+        code = 'void main() {\n  debugPaintSizeEnabled = true;\n  runApp(const MyApp());\n}'
         lines = code.split('\n')
         matches = self.patterns['V018'].search(code, lines)
-        self.assertEqual(len(matches), 0, "kReleaseMode-guarded debugPrint should not be flagged")
+        self.assertGreater(len(matches), 0, "debugPaintSizeEnabled = true should be flagged")
     
     # ----- V025: Excessive Permissions -----
     

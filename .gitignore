@@ -35,5 +35,6 @@ results.json
 # IDE and tool configs
 .vscode/
 .idea/
+.claude/
 __pycache__/
 *.pyc

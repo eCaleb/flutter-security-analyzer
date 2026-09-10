@@ -1,4 +1,4 @@
-# Flutter Security Scanner
+# Flutter Security Analyzer
 
 A static analysis tool for detecting security vulnerabilities in Flutter/Dart applications with OWASP MASVS v2.1.0 compliance mapping.
 

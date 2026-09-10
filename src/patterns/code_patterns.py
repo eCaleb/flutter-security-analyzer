@@ -18,11 +18,15 @@ CODE_PATTERNS = [
         'cwe_id': 'CWE-489',
         'remediation': 'Remove all debug code before release. Use kDebugMode/kReleaseMode flags to conditionally execute debug code. Verify build configuration excludes debug features.',
         'patterns': [
-            r'(?:debugMode|isDebug)\s*[:=]\s*true',
+            # Actual debug-mode toggles left switched on. This rule targets debug
+            # FLAGS, not logging: plain debugPrint() calls are standard Flutter API
+            # usage and are covered (only when they leak sensitive data) by V003.
+            r'(?:debugMode|isDebug|isDebugMode|enableDebug|debugEnabled|devMode)\s*[:=]\s*true\b',
             r'kDebugMode\s*\?\s*true',
-            r'const\s+bool\s+isDebug\s*=\s*true',
+            r'(?:const|static|final|var)\s+(?:bool\s+)?(?:debugMode|isDebug|devMode)\s*=\s*true\b',
             r'assert\s*\(\s*debugMode\s*==\s*true\s*\)',
-            r'debugPrint\s*\(',
+            # Genuine Flutter debug-rendering toggles left enabled
+            r'debug(?:Paint\w*|PrintRebuild\w*|PrintMarkNeedsLayout|RepaintRainbow)\s*=\s*true',
         ],
         'false_positive_patterns': [
             r'kDebugMode\s*\?\s*true',
