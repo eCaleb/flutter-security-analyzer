@@ -1,8 +1,11 @@
 # Flutter Security Analyzer
 
+[![CI](https://github.com/eCaleb/flutter-security-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/eCaleb/flutter-security-analyzer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A static analysis tool for detecting security vulnerabilities in Flutter/Dart applications with OWASP MASVS v2.1.0 compliance mapping.
 
-##  Academic Project
+## Academic Project
 
 This tool is developed as part of an MSc Cybersecurity final year project at the University of Chester.
 
@@ -10,91 +13,96 @@ This tool is developed as part of an MSc Cybersecurity final year project at the
 **Supervisor:** Dr. Bismark Asare  
 **Module:** WB7103/WB7104
 
-##  Features
+## Features
 
 - **Pattern-Based Detection**: Regex-based vulnerability detection for Dart code
 - **MASVS Compliance Mapping**: All findings mapped to OWASP MASVS v2.1.0 controls
 - **Multiple Output Formats**: Console, JSON, and HTML reports
 - **CI/CD Integration**: Exit codes suitable for pipeline integration
-- **26+ Vulnerability Patterns**: Covering all 8 MASVS categories
+- **26 Vulnerability Checks**: Covering all 8 MASVS categories
 
-##  MASVS Categories Covered
+## Sample Report
 
-| Category | Description | Patterns |
-|----------|-------------|----------|
-| STORAGE | Data storage security | 5 |
-| CRYPTO | Cryptographic implementations | 4 |
-| AUTH | Authentication and authorization | 4 |
-| NETWORK | Network communication security | 4 |
+![HTML report from scanning samples/vulnerable_app.dart](docs/images/sample-report.png)
+
+The HTML report from scanning `samples/vulnerable_app.dart`, which contains deliberate vulnerabilities: 47 findings across all 8 MASVS categories.
+
+## MASVS Categories Covered
+
+| Category | Description | Checks |
+|----------|-------------|--------|
+| STORAGE | Data storage security | 4 |
+| CRYPTO | Cryptographic implementations | 3 |
+| AUTH | Authentication and authorization | 3 |
+| NETWORK | Network communication security | 3 |
 | PLATFORM | Platform interaction security | 4 |
-| CODE | Code quality and injection prevention | 5 |
-| RESILIENCE | Anti-reverse engineering | 4 |
-| PRIVACY | User privacy protection | 4 |
+| CODE | Code quality and injection prevention | 4 |
+| RESILIENCE | Anti-reverse engineering | 3 |
+| PRIVACY | User privacy protection | 2 |
 
-##  Installation
+Two of these checks (missing certificate pinning and missing root/jailbreak detection) look at the project's `pubspec.yaml` rather than individual lines of code.
 
-```
-bash
+## Installation
+
+```bash
 # Clone the repository
 git clone https://github.com/eCaleb/flutter-security-analyzer.git
 cd flutter-security-analyzer
 
-# Install dependencies (optional - for development)
-pip install -r requirements.txt
-# or if pip is not on your PATH:
-pip3 install -r requirements.txt
+# Install as a package, which adds the flutter-security-analyzer command
+pip install .
 
-# Or install as a package
-pip install -e .
+# Optional: development dependencies (pytest, coverage, linters)
+pip install -r requirements.txt
 ```
 
-##  Usage
+The scanner has no runtime dependencies beyond the Python standard library (Python 3.9 or later). You can also run it straight from the source tree with `python src/main.py` instead of installing it.
+
+## Usage
 
 ### Basic Scan
 
-```
-bash
+```bash
+flutter-security-analyzer /path/to/flutter/project
+
+# or, without installing
 python src/main.py /path/to/flutter/project
 ```
 
 ### Output Formats
 
-```
-bash
+```bash
 # Console output (default)
-python src/main.py ./my_flutter_app
+flutter-security-analyzer ./my_flutter_app
 
 # JSON output
-python src/main.py ./my_flutter_app -f json -o results.json
+flutter-security-analyzer ./my_flutter_app -f json -o results.json
 
 # HTML report
-python src/main.py ./my_flutter_app -f html -o report.html
+flutter-security-analyzer ./my_flutter_app -f html -o report.html
 ```
 
 ### Filter by Severity
 
-```
-bash
+```bash
 # Only show high and critical findings
-python src/main.py ./my_flutter_app -s high
+flutter-security-analyzer ./my_flutter_app -s high
 ```
 
 ### Filter by MASVS Category
 
-```
-bash
+```bash
 # Only scan for STORAGE and CRYPTO issues
-python src/main.py ./my_flutter_app --masvs-category STORAGE CRYPTO
+flutter-security-analyzer ./my_flutter_app --masvs-category STORAGE CRYPTO
 ```
 
 ### Verbose Mode
 
-```
-bash
-python src/main.py ./my_flutter_app -v
+```bash
+flutter-security-analyzer ./my_flutter_app -v
 ```
 
-##  CI/CD Integration
+## CI/CD Integration
 
 ### Exit Codes
 
@@ -104,22 +112,30 @@ python src/main.py ./my_flutter_app -v
 
 ### GitHub Actions Example
 
-```
-yaml
+```yaml
 - name: Security Scan
   run: |
-    pip install flutter-security-analyzer
+    pip install git+https://github.com/eCaleb/flutter-security-analyzer
     flutter-security-analyzer ./lib -f json -o security-results.json
 ```
 
 ### Docker
 
-```
-bash
-docker run -v $(pwd):/app flutter-security-analyzer /app
+```bash
+# Build the image (this also runs the unit tests)
+docker build -t flutter-security-analyzer .
+
+# Scan a project mounted at /scan
+docker run -v $(pwd):/scan flutter-security-analyzer /scan
 ```
 
-##  Project Structure
+## Known Limitations
+
+- Detection is pattern-based. The scanner matches regular expressions against the source rather than tracing how data flows between functions or files, so expect some false positives and some missed issues. A shared whitelist filters common false positives, such as security keywords in function and class names.
+- It scans `.dart` files and `pubspec.yaml` only. The `android/`, `ios/` and test folders are skipped, so it does not check `AndroidManifest.xml`, `Info.plist`, native code or compiled builds.
+- Findings are a starting point for review, not proof of a vulnerability. Check each one in context before acting on it.
+
+## Project Structure
 
 ```
 flutter-security-analyzer/
@@ -146,18 +162,18 @@ flutter-security-analyzer/
 │       ├── json_reporter.py
 │       └── html_reporter.py
 ├── tests/
-├── docs/
-├── samples/
+├── docs/images/             # README screenshots
+├── samples/                 # Deliberately vulnerable and secure sample apps
 ├── .github/workflows/
+├── Dockerfile
 ├── requirements.txt
 ├── setup.py
 └── README.md
 ```
 
-##  Testing
+## Testing
 
-```
-bash
+```bash
 # Run all tests
 pytest
 
@@ -165,17 +181,16 @@ pytest
 pytest --cov=src tests/
 ```
 
-##  License
+## License
 
 MIT License - See LICENSE file for details.
 
-##  Acknowledgements
+## Acknowledgements
 
 - OWASP Mobile Application Security Project
 - University of Chester Cybersecurity Department
 
-
-## 📚 References
+## References
 
 - [OWASP MASVS v2.1.0](https://mas.owasp.org/MASVS/)
 - [OWASP Mobile Security Testing Guide](https://mas.owasp.org/MSTG/)
