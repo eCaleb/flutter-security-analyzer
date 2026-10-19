@@ -84,6 +84,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install as a package and check the command works
+        run: |
+          pip install .
+          flutter-security-analyzer --version
+          flutter-security-analyzer samples/vulnerable_app.dart -f json -o /tmp/installed-scan.json || true
+          test -s /tmp/installed-scan.json
+
       - name: Run scan on sample vulnerable app (Console)
         working-directory: src
         run: |
