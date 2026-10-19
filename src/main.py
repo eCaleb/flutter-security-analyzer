@@ -26,7 +26,7 @@ from reporters.html_reporter import HtmlReporter
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        prog='flutter-security-scanner',
+        prog='flutter-security-analyzer',
         description='Static security analysis tool for Flutter/Dart applications',
         epilog='Part of MSc Cybersecurity Project - University of Chester'
     )

@@ -4,10 +4,10 @@
 # the scanner against mounted Flutter project directories.
 #
 # Usage:
-#   Build:  docker build -t flutter-security-scanner .
-#   Scan:   docker run -v /path/to/flutter/project:/scan flutter-security-scanner /scan
-#   JSON:   docker run -v /path/to/project:/scan -v /path/to/output:/output flutter-security-scanner /scan -f json -o /output/results.json
-#   HTML:   docker run -v /path/to/project:/scan -v /path/to/output:/output flutter-security-scanner /scan -f html -o /output/report.html
+#   Build:  docker build -t flutter-security-analyzer .
+#   Scan:   docker run -v /path/to/flutter/project:/scan flutter-security-analyzer /scan
+#   JSON:   docker run -v /path/to/project:/scan -v /path/to/output:/output flutter-security-analyzer /scan -f json -o /output/results.json
+#   HTML:   docker run -v /path/to/project:/scan -v /path/to/output:/output flutter-security-analyzer /scan -f html -o /output/report.html
 #
 # Author: Caleb Elebhose
 # Module: WB7103/WB7104 MSc Cybersecurity Project
@@ -56,7 +56,7 @@ ENTRYPOINT ["python", "src/main.py"]
 CMD ["--help"]
 
 # Labels for container metadata
-LABEL maintainer="Caleb Elebhose <caleb.elebhose@chester.ac.uk>"
+LABEL maintainer="Caleb Elebhose <elebhosec@gmail.com>"
 LABEL description="Flutter Security Scanner - SAST tool for Dart/Flutter with MASVS v2.1.0 mapping"
 LABEL version="1.0.0"
-LABEL org.opencontainers.image.source="https://github.com/calebelebhose/flutter-security-scanner"
+LABEL org.opencontainers.image.source="https://github.com/eCaleb/flutter-security-analyzer"
