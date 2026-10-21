@@ -7,7 +7,7 @@ the vulnerability detection process.
 
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import Dict, List, Set, Union
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -131,6 +131,31 @@ class SecurityScanner:
     
     VERSION = "1.0.0"
     
+    # Rules that look for problems in project configuration rather than in
+    # Dart code, mapped to the files they should read (relative to the
+    # project root). Only these rules are applied to these files.
+    CONFIG_FILE_RULES = {
+        # Outdated dependency versions are declared in pubspec.yaml
+        'V020': ['pubspec.yaml'],
+        # The minimum SDK version is set in the Android and iOS build files
+        'V021': [
+            'android/app/build.gradle',
+            'android/app/build.gradle.kts',
+            'ios/Podfile',
+        ],
+        # Release builds are run from CI configuration and build scripts
+        'V024': [
+            '.github/workflows/*.yml',
+            '.github/workflows/*.yaml',
+            '.gitlab-ci.yml',
+            'codemagic.yaml',
+            'bitrise.yml',
+            'Makefile',
+            '*.sh',
+            'scripts/*.sh',
+        ],
+    }
+    
     def __init__(self, config: ScannerConfig):
         """
         Initialize the scanner with configuration.
@@ -177,6 +202,14 @@ class SecurityScanner:
             results.total_files_scanned += 1
             results.total_lines_scanned += line_count
             all_dart_content.append(file_content)
+        
+        # Scan project configuration files with the rules that target them
+        if path.is_dir():
+            for config_file, rule_ids in self._discover_config_files(path).items():
+                config_findings, line_count = self._scan_config_file(config_file, rule_ids)
+                results.findings.extend(config_findings)
+                results.total_files_scanned += 1
+                results.total_lines_scanned += line_count
         
         # Check pubspec.yaml for project-level security packages
         # Pass combined Dart content to check for sensitive functionality
@@ -255,23 +288,85 @@ class SecurityScanner:
             matches = pattern.search(content, lines)
             
             for match in matches:
-                finding = Finding(
-                    vulnerability_id=pattern.vulnerability_id,
-                    title=pattern.title,
-                    description=pattern.description,
-                    severity=pattern.severity,
-                    file_path=str(file_path),
-                    line_number=match['line_number'],
-                    code_snippet=match['code_snippet'],
-                    masvs_category=pattern.masvs_category,
-                    masvs_control=pattern.masvs_control,
-                    remediation=pattern.remediation,
-                    cwe_id=pattern.cwe_id,
-                    confidence=match.get('confidence', 'high')
-                )
-                findings.append(finding)
+                findings.append(self._make_finding(pattern, file_path, match))
         
         return findings, line_count, content
+    
+    def _discover_config_files(self, path: Path) -> Dict[Path, Set[str]]:
+        """
+        Find the project configuration files read by CONFIG_FILE_RULES.
+        
+        Args:
+            path: Project root directory
+        
+        Returns:
+            Mapping of each file found to the rule IDs that should read it
+        """
+        config_files: Dict[Path, Set[str]] = {}
+        
+        for rule_id, file_globs in self.CONFIG_FILE_RULES.items():
+            for file_glob in file_globs:
+                for file_path in sorted(path.glob(file_glob)):
+                    if file_path.is_file():
+                        config_files.setdefault(file_path, set()).add(rule_id)
+        
+        return config_files
+    
+    def _scan_config_file(self, file_path: Path, rule_ids: Set[str]) -> tuple[List[Finding], int]:
+        """
+        Scan a configuration file with only the rules that target it.
+        
+        Lines starting with '#' are comments in YAML, Podfiles and shell
+        scripts, so they are blanked before matching. Line numbers are kept
+        the same so findings still point at the right line. Gradle '//'
+        comments are already skipped by the pattern's false positive check.
+        
+        Args:
+            file_path: Path to the configuration file
+            rule_ids: Vulnerability IDs to apply to this file
+        
+        Returns:
+            Tuple of (list of findings, line count)
+        """
+        findings = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                original_lines = f.read().split('\n')
+        except (IOError, UnicodeDecodeError) as e:
+            if self.config.verbose:
+                print(f"Warning: Could not read {file_path}: {e}")
+            return [], 0
+        
+        lines = ['' if line.strip().startswith('#') else line for line in original_lines]
+        content = '\n'.join(lines)
+        
+        for rule_id in sorted(rule_ids):
+            pattern = self.pattern_registry.get_pattern_by_id(rule_id)
+            if pattern is None:
+                continue
+            
+            for match in pattern.search(content, lines):
+                findings.append(self._make_finding(pattern, file_path, match))
+        
+        return findings, len(original_lines)
+    
+    def _make_finding(self, pattern, file_path: Path, match: dict) -> Finding:
+        """Build a Finding from a pattern match."""
+        return Finding(
+            vulnerability_id=pattern.vulnerability_id,
+            title=pattern.title,
+            description=pattern.description,
+            severity=pattern.severity,
+            file_path=str(file_path),
+            line_number=match['line_number'],
+            code_snippet=match['code_snippet'],
+            masvs_category=pattern.masvs_category,
+            masvs_control=pattern.masvs_control,
+            remediation=pattern.remediation,
+            cwe_id=pattern.cwe_id,
+            confidence=match.get('confidence', 'high')
+        )
     
     def _filter_by_severity(self, findings: List[Finding]) -> List[Finding]:
         """Filter findings by minimum severity level."""

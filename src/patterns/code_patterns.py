@@ -70,11 +70,12 @@ CODE_PATTERNS = [
         'cwe_id': 'CWE-1104',
         'remediation': 'Regularly update dependencies. Use `flutter pub outdated` to check for updates. Subscribe to security advisories for critical packages. Implement dependency scanning in CI/CD.',
         'patterns': [
-            # Note: This vulnerability requires pubspec.yaml parsing and version checking
-            # These patterns detect potential indicators
-            r'http:\s*\^\s*0\.[0-9]',  # Very old http package
-            r'dio:\s*\^\s*[0-3]\.',  # Old dio versions
-            r'webview_flutter:\s*\^\s*[0-2]\.',  # Old webview
+            # Applied to pubspec.yaml (see SecurityScanner.CONFIG_FILE_RULES).
+            # The lookbehind stops matches inside longer package names,
+            # e.g. 'rhttp: ^0.18.0' is a different package from 'http'.
+            r'(?<![\w-])http:\s*\^\s*0\.[0-9]',  # Very old http package
+            r'(?<![\w-])dio:\s*\^\s*[0-3]\.',  # Old dio versions
+            r'(?<![\w-])webview_flutter:\s*\^\s*[0-2]\.',  # Old webview
         ],
         'false_positive_patterns': []
     },
@@ -88,8 +89,8 @@ CODE_PATTERNS = [
         'cwe_id': 'CWE-1104',
         'remediation': 'Set minSdkVersion to at least 23 (Android 6.0) for modern security features. For iOS, target iOS 12.0 or higher. Consider security implications of supporting older versions.',
         'patterns': [
-            # Note: This requires build.gradle/Podfile parsing
-            # These patterns match configuration files
+            # Applied to android/app/build.gradle(.kts) and ios/Podfile
+            # (see SecurityScanner.CONFIG_FILE_RULES)
             r'minSdkVersion\s+(?:1[0-9]|2[0-2])\b',  # Android SDK < 23
             r'minSdk\s*=\s*(?:1[0-9]|2[0-2])\b',
             r"platform\s*:ios\s*,\s*['\"](?:[0-9]|1[0-1])\.",  # iOS < 12

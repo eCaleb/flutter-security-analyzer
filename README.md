@@ -40,7 +40,16 @@ The HTML report from scanning `samples/vulnerable_app.dart`, which contains deli
 | RESILIENCE | Anti-reverse engineering | 3 |
 | PRIVACY | User privacy protection | 2 |
 
-Two of these checks (missing certificate pinning and missing root/jailbreak detection) look at the project's `pubspec.yaml` rather than individual lines of code.
+Most checks run line by line on `.dart` files. A few look at project configuration instead:
+
+| Check | Files read |
+|-------|------------|
+| Missing certificate pinning, missing root/jailbreak detection | `pubspec.yaml` (dependencies) |
+| Vulnerable third-party dependencies | `pubspec.yaml` |
+| Outdated minimum SDK version | `android/app/build.gradle`, `android/app/build.gradle.kts`, `ios/Podfile` |
+| Missing code obfuscation | CI workflows (`.github/workflows/*.yml`, `.gitlab-ci.yml`, `codemagic.yaml`, `bitrise.yml`), `Makefile` and shell scripts in the project root or `scripts/` |
+
+Only the check listed for a file is applied to it, and comment lines are ignored.
 
 ## Installation
 
@@ -132,7 +141,8 @@ docker run -v $(pwd):/scan flutter-security-analyzer /scan
 ## Known Limitations
 
 - Detection is pattern-based. The scanner matches regular expressions against the source rather than tracing how data flows between functions or files, so expect some false positives and some missed issues. A shared whitelist filters common false positives, such as security keywords in function and class names.
-- It scans `.dart` files and `pubspec.yaml` only. The `android/`, `ios/` and test folders are skipped, so it does not check `AndroidManifest.xml`, `Info.plist`, native code or compiled builds.
+- It scans `.dart` files plus the configuration files listed above. Apart from the build files used for the minimum SDK check, the `android/` and `ios/` folders are skipped, as are test folders, so it does not check `AndroidManifest.xml`, `Info.plist`, native code or compiled builds.
+- The dependency check only recognises a short list of known outdated versions written with a caret (for example `http: ^0.13.0`). It is not a full vulnerability database lookup, so use `flutter pub outdated` as well.
 - Findings are a starting point for review, not proof of a vulnerability. Check each one in context before acting on it.
 
 ## Project Structure
